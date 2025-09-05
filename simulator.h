@@ -37,6 +37,7 @@ class Simulator {
             rxData_.resize(L_ , K_);
             Y_.resize(L_ , K_);
             X_.resize(L_ , K_);
+            X_l.resize(K_, K_);
             R_.resize(L_ , K_);
             symbol_.resize(NUMBER_OF_SYMBOLS);
             xPro.resize(NUMBER_OF_SYMBOLS);
@@ -213,6 +214,7 @@ class Simulator {
         Eigen::VectorXcd symbol_;       // 送信可能なシンボルベクトル
         Eigen::MatrixXcd Y_;            // 受信信号
         Eigen::MatrixXcd X_;            // 送信信号
+        Eigen::MatrixXcd X_l;           // ある時刻の送信信号の対角行列
         Eigen::MatrixXcd R_;            // 等化後の受信信号
         Eigen::VectorXcd H_est_;        // 伝送路の周波数応答の推定値
         Eigen::VectorXd xPro;           // 送信信号の事後確率
@@ -293,7 +295,6 @@ class Simulator {
                 for(auto l = 0; l < L_; l++) {
                     h_(l, q) = h_q(l);
                 }
-
             }
         }
 
@@ -458,7 +459,8 @@ class Simulator {
         
         //パイロットシンボルからｈの初期値を得る
         void setH_byPilot(){
-            h_l = (W_.adjoint()*X_.col(0).adjoint()*X_.col(0)*W_).inverse()*W_.adjoint()*X_.col(0).adjoint()*Y_.col(0);
+            X_l = X_.row(0).asDiagonal();
+            h_l = (W_.conjugate()*X_l.adjoint()*X_l*W_.transpose()).inverse()*W_.conjugate()*X_l.adjoint()*Y_.row(0);
         }
 
         // EMアルゴリズムでHを作る
