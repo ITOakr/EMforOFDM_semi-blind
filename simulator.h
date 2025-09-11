@@ -24,7 +24,7 @@ class Simulator {
            //std::cin >> NUMBER_OF_TRIAL;
 
             // リサイズ
-            W_.resize(Q_ , K_);
+            W_.resize(K_ , Q_);
             xi_.resize(Q_);
             h_.resize(L_ , Q_);
             Cmat_.resize(L_ , L_);
@@ -234,9 +234,9 @@ class Simulator {
             for (int q = 0; q < Q_; ++q) {
                 for (int k = 0; k < K_ / 2; ++k) {
                     // -26から-1番目のキャリヤ
-                    W_(q, k) = std::polar(1.0, -2.0 * M_PI * ((double)k - (double)K_ / 2.0) * (double)q / (double)NUMBER_OF_FFT);
+                    W_(k, q) = std::polar(1.0, -2.0 * M_PI * ((double)k - (double)K_ / 2.0) * (double)q / (double)NUMBER_OF_FFT);
                     // 1から26番目のキャリヤ
-                    W_(q, k + K_ / 2) = std::polar(1.0, -2.0 * M_PI * ((double)k + 1.0) * (double)q / (double)NUMBER_OF_FFT);
+                    W_(k + K_ / 2, q) = std::polar(1.0, -2.0 * M_PI * ((double)k + 1.0) * (double)q / (double)NUMBER_OF_FFT);
                 }
             }
         }
@@ -352,7 +352,9 @@ class Simulator {
             // 伝送路のインパルス応答の生成
             seth_();
             // 伝送路の周波数応答の生成:式(19)
-            H_ = h_ * W_;
+            for(int l = 0; l < L_; l++){
+                H_.row(l) = W_ * h_.row(l);
+            }
         }
 
         /**
@@ -364,6 +366,17 @@ class Simulator {
                     Y_(l, k) = H_(l, k) * X_(l, k) + noiseSD_ * unitCNormalRand_();
                 }
             }
+        }
+
+        //パイロットシンボルからｈの初期値を得る
+        void seth_l_byPilot(){
+            X_l = X_.row(0).asDiagonal();
+            h_l = (W_.adjoint()*X_l.adjoint()*X_l*W_).inverse()*W_.adjoint()*X_l.adjoint()*Y_.row(0).transpose();
+        }
+
+        // Xの事後確率を求める
+        void computeXPostProb(){
+            
         }
 
         /**
@@ -453,15 +466,7 @@ class Simulator {
         //     }
         // }
 
-        void Mstep(int l){
-
-        }
         
-        //パイロットシンボルからｈの初期値を得る
-        void setH_byPilot(){
-            X_l = X_.row(0).asDiagonal();
-            h_l = (W_.conjugate()*X_l.adjoint()*X_l*W_.transpose()).inverse()*W_.conjugate()*X_l.adjoint()*Y_.row(0);
-        }
 
         // EMアルゴリズムでHを作る
         // void setH_byEM(){
