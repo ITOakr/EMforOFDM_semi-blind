@@ -96,23 +96,21 @@ class Simulator {
             f_d_ = f_d;
         }
 
-       
 
         /**
          * 数値計算実験
          * @return ビット誤り率のシミュレーション値
          */
-        double getBERSimulation() {
+        double getBER_EM_Simulation() {
             int count = 0;
             for(int tri = 0; tri < NUMBER_OF_TRIAL; tri++) {
                 setX_();
                 setH_();
                 setY_();
-                estimateChannelByML();
-                equalizeByEstimatedChannel();
+
+                equalizeChannelWithEM();
                 setRxDataByML();
-                //equalizeByEstimatedChannel_test();
-                //setRxDataByML_test();
+
                 count += getBitErrorCount();
             }
             return (double)count / ((double)NUMBER_OF_TRIAL * (double)NUMBER_OF_BIT * (double)K_ * ((double)L_ - NUMBER_OF_PILOT));
@@ -186,7 +184,7 @@ class Simulator {
             return hh_l / (double)NUMBER_OF_TRIAL;
         }
 
-    //private:
+    private:
         double noiseSD_;                            // 雑音の標準偏差
         int NUMBER_OF_TRIAL;                        // 試行回数
         const int K_ = 52;                          // サブキャリア数 K
@@ -374,59 +372,53 @@ class Simulator {
             h_l = (W_.adjoint()*X_l.adjoint()*X_l*W_).inverse()*W_.adjoint()*X_l.adjoint()*Y_.row(0).transpose();
         }
 
-        // Xの事後確率を求める
-        void computeXPostProb(){
-            
-        }
+        void equalizeChannelWithEM(){
+            seth_l_byPilot();
 
-        /**
-         * 平均二乗誤差（L2ノルム）(RMSE)
-         * @return 誤差のL2ノルム
-         */
-        double getMeanSquaredError() {
-            double sum = 0;
-            for(int k = 0; k < K_; k++) {
-                for(int l = 0; l < L_; l++) {
-                    sum += std::norm(H_(l, k) - H_est_(k));
-                }
-            }
-            return sqrt(sum / (double)L_ / (double)K_);
-        }
-
-        /**
-         * MLによる伝送路推定
-         * @return 誤差のL2ノルム
-         */
-        void estimateChannelByML() {
-            Eigen::VectorXcd sum(K_);
-            sum.resize(K_);
-            sum.setZero();
-            for(int k = 0; k < K_; k++) {
-                for(int i = 0; i < NUMBER_OF_PILOT; i++) {
-                    // パイロットシンボル区間での推定
-                    sum(k) += Y_(i, k) / X_(i, k);
-                }
-            }
-            H_est_ = sum / (double)NUMBER_OF_PILOT;
-        }
-
-        /**
-         * 等化
-         */
-        void equalizeByEstimatedChannel() {
+            const int MAX_ITER = 10;
             for(int l = NUMBER_OF_PILOT; l < L_; l++) {
+                for(int iter = 0; iter < MAX_ITER; iter++) {
+                    //Eステップ
+                    Estep(l);
+                    //Mステップ
+                    Mstep(l);
+                }
                 for(int k = 0; k < K_; k++) {
-                    R_(l, k) = Y_(l, k) / H_est_(k);
+                    R_(l, k) = Y_(l, k) / (W_.row(k) * h_l);
                 }
             }
         }
 
-         void equalizeByEstimatedChannel_test() {
-            for(int l = 0; l < L_; l++) {
-                for(int k = 0; k < K_; k++) {
-                    R_(l, k) = Y_(l, k) / H_(l,k);
+        void Estep(int l) {
+            Eigen::VectorXd H_current = W_ * h_l;
+
+            for(int k = 0; k < K_; k++) {
+                double sumxP = 0.0;
+                Eigen::VectorXd posterior_prob(NUMBER_OF_SYMBOLS);
+                for(int i = 0; i < NUMBER_OF_SYMBOLS; i++) {
+                    std::complex<double> s = symbol_(i);
+                    double norm = std::norm(Y_(l, k) - H_current(k) * s);
+                    double variance = noiseSD_ * noiseSD_;
+                    posterior_prob(i) = std::exp(-norm / variance);
+                    sumxP += posterior_prob(i);
                 }
+
+                posterior_prob /= sumxP;
+
+                std::complex<double> expected_X = 0.0;
+                double expected_X_norm_sq = 0.0;
+
+                for(int i = 0; i < NUMBER_OF_SYMBOLS; i++) {
+                    expected_X += posterior_prob(i) * symbol_(i);
+                    expected_X_norm_sq += posterior_prob(i) * std::norm(symbol_(i));
+                }
+                X_bar(k, k) = expected_X;
+                R_moment(k, k) = expected_X_norm_sq;
             }
+        }
+
+        void Mstep(int l) {
+            h_l = (W_.adjoint()*R_moment*W_).inverse()*W_.adjoint()*X_bar.adjoint()*Y_.row(l).transpose();
         }
 
         /**
@@ -437,47 +429,6 @@ class Simulator {
             symbol_(1) = 1.0;
         }
         
-        //Eステップ
-        // void Estep(int l) {
-        //     for(int k = 0; k < K_; k++) {
-        //         double sumxP = 0.0;
-
-        //         for(int i = 0; i < NUMBER_OF_SYMBOLS; i++) {
-        //             auto s = symbol_(i);
-        //             double expArg;
-        //             expArg = -std::norm(Y_.col(l) - W_ * h_l * s);
-        //             xPro[i] = std::exp(expArg);
-        //             sumxP += xPro[i];
-        //         }
-
-        //         for(int idx = 0; idx < NUMBER_OF_SYMBOLS; idx++) {
-        //             xPro[idx] = xPro[idx]/sumxP;
-        //         }
-
-        //         std::complex<double> xExp = 0.0;
-        //         double rVar = 0.0;
-
-        //         for(int i = 0; i < NUMBER_OF_SYMBOLS; i++) {
-        //             xExp += xPro[i] * symbol_(i);
-        //             rVar += xPro[i] * std::norm(symbol_(i));
-        //         }
-        //         X_bar(k, k) = xExp;
-        //         R_moment(k, k) = rVar; 
-        //     }
-        // }
-
-        
-
-        // EMアルゴリズムでHを作る
-        // void setH_byEM(){
-        //     for(auto l = 1; l < L_; l++){
-        //         for( int iter = 0; iter < 10; iter++){
-        //             Estep(l);
-        //             Mstep(l);
-        //         }
-        //     }
-        // }
-
         /**
          * 最尤復調
          */
@@ -488,23 +439,7 @@ class Simulator {
                 for(int k = 0; k < K_; k++) {
                     for(int i = 0; i < NUMBER_OF_SYMBOLS; i++) {
                         // 最尤復調の周波数応答は推定値を使う？
-                        obj(i) = std::norm(H_est_(k)) * std::norm((R_(l, k) - symbol_(i)));
-                    }
-                    Eigen::VectorXd::Index minColumn;       // ノルムが最小な index（つまり受信データ）
-                    obj.minCoeff(&minColumn);
-                    rxData_(l, k) = minColumn;
-                }
-            }
-        }
-
-        void setRxDataByML_test() {
-            Eigen::VectorXd obj(NUMBER_OF_SYMBOLS);     // 最小化の目的関数
-
-            for(int l = 0; l < L_; l++) {
-                for(int k = 0; k < K_; k++) {
-                    for(int i = 0; i < NUMBER_OF_SYMBOLS; i++) {
-                        // 最尤復調の周波数応答は推定値を使う？
-                        obj(i) = std::norm(H_(l, k)) * std::norm((R_(l, k) - symbol_(i)));
+                        obj(i) = std::norm((R_(l, k) - symbol_(i)));
                     }
                     Eigen::VectorXd::Index minColumn;       // ノルムが最小な index（つまり受信データ）
                     obj.minCoeff(&minColumn);
