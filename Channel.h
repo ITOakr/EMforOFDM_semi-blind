@@ -106,7 +106,7 @@ private:
         {
             for (auto l_2 = 0; l_2 < params_.L_; l_2++)
             {
-                Cmat_(l_1, l_2) = std::cyl_bessel_j(0, 2.0 * M_PI * (double)abs((l_1 - l_2) * params_.Ts_) * f_d_); // Jakesモデル
+                Cmat_(l_1, l_2) = std::cyl_bessel_j(0, 2.0 * M_PI * std::abs((l_1 - l_2) * params_.Ts_) * f_d_); // Jakesモデル
             }
         }
     }
