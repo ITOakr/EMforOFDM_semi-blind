@@ -1,5 +1,5 @@
 #ifndef PARAMETERS_H
-#define PAEAMETERS_H
+#define PARAMETERS_H
 #include <cmath>
 
 // シミュレーションのパラメータをまとめた構造体

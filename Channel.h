@@ -11,6 +11,9 @@ class Channel
 public:
     Channel(const SimulationParameters &params) : params_(params)
     {
+        W_.resize(params_.K_, params_.Q_);
+        setW_();
+
         xi_.resize(params_.Q_);
         h_.resize(params_.L_, params_.Q_);
         Cmat_.resize(params_.L_, params_.L_);
@@ -34,7 +37,7 @@ public:
         // 伝送路の周波数応答の生成:式(19)
         for (int l = 0; l < params_.L_; l++)
         {
-            H_.row(l) = W_ * h_.row(l);
+            H_.row(l) = (W_ * h_.row(l).transpose()).transpose();
         }
     }
 
@@ -57,6 +60,20 @@ private:
     Eigen::MatrixXcd W_; // DFT行列（Channelクラス内で閉じるため、Simulatorから移動）
 
     cnormal_distribution<> unitCNormalRand_;
+
+    void setW_()
+    {
+        for (int q = 0; q < params_.Q_; ++q)
+        {
+            for (int k = 0; k < params_.K_ / 2; ++k)
+            {
+                // -26から-1番目のキャリヤ
+                W_(k, q) = std::polar(1.0, -2.0 * M_PI * ((double)k - (double)params_.K_ / 2.0) * (double)q / (double)params_.NUMBER_OF_FFT);
+                // 1から26番目のキャリヤ
+                W_(k + params_.K_ / 2, q) = std::polar(1.0, -2.0 * M_PI * ((double)k + 1.0) * (double)q / (double)params_.NUMBER_OF_FFT);
+            }
+        }
+    }
 
     void setChannelProfile()
     {
