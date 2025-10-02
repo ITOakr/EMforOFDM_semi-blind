@@ -157,7 +157,7 @@ private:
             // std::cout << "L=" << l << ":" << h_l << std::endl;
             for (int k = 0; k < params_.K_; k++)
             {
-                R_(l, k) = Y_(l, k) / (W_.row(k).dot(h_l));
+                R_(l, k) = Y_(l, k) / (W_.row(k) * h_l)(0);
             }
         }
         // std::cout << "R_=" << R_ << std::endl;
