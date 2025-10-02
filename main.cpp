@@ -7,6 +7,7 @@
 #include <iostream>
 #include <fstream>
 #include "simulator.h"
+#include "parameters.h"
 
 // パラメータ
 static const int EbN0dBmin = 0;
@@ -28,7 +29,8 @@ int main()
 	fileName = "BER.csv";
 	ofs.open(fileName);
 
-    Simulator sim;
+    SimulationParameters params;
+    Simulator sim(params);
 
     std::cout << "--------------------------------------------------------------------" << std::endl;
     std::cout << "f_d?" << std::endl;
@@ -44,7 +46,7 @@ int main()
         sim.setNoiseSD(EbN0dB);
         
         // シミュレーション
-        ber = sim.getBERSimulation();
+        ber = sim.getBER_EM_Simulation();
         // 標準出力
         std::cout << "-----------" << std::endl;
         std::cout << EbN0dB << "," << ber << std::endl;
