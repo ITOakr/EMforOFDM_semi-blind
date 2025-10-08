@@ -85,7 +85,7 @@ private:
 
     double noiseSD_;     // 雑音の標準偏差
     int NUMBER_OF_TRIAL; // 試行回数
-    double fd_Ts_;         // ドップラー周波数
+    double fd_Ts_;         // 正規化ドップラー (f_d * T_s): 単位なし
 };
 
 #endif /* SIMULATOR_H */
