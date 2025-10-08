@@ -53,7 +53,7 @@ int main()
 	{
 		// --- モード1: Eb/N0スイープ ---
 		double dopplerFrequence;
-		std::cout << "Enter fixed Doppler frequency (f_d*T_s) [Hz]:" << std::endl;
+		std::cout << "Enter normalized Doppler f_d*T_s:" << std::endl;
 		std::cin >> dopplerFrequence;
 
 		fileName = "f_d*T_s =" + std::to_string(dopplerFrequence) + "_BER_vs_EbN0.csv";
