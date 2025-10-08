@@ -29,9 +29,9 @@ public:
     }
 
     // 周波数応答 H_ を生成する public メソッド
-    void generateFrequencyResponse(double f_d)
+    void generateFrequencyResponse(double fd_Ts)
     {
-        f_d_ = f_d;
+        fd_Ts_ = fd_Ts;
         // 伝送路のインパルス応答の生成
         seth_();
         // 伝送路の周波数応答の生成:式(19)
@@ -49,7 +49,7 @@ public:
 
 private:
     const SimulationParameters &params_;
-    double f_d_;
+    double fd_Ts_;
 
     Eigen::VectorXd xi_;   // 伝送路のインパルス応答の遅延プロファイル
     Eigen::MatrixXcd h_;   // インパルス応答
@@ -106,7 +106,7 @@ private:
         {
             for (auto l_2 = 0; l_2 < params_.L_; l_2++)
             {
-                Cmat_(l_1, l_2) = std::cyl_bessel_j(0, 2.0 * M_PI * std::abs((l_1 - l_2) * params_.Ts_) * f_d_); // Jakesモデル
+                Cmat_(l_1, l_2) = std::cyl_bessel_j(0, 2.0 * M_PI * std::abs(l_1 - l_2) * fd_Ts_); // Jakesモデル
             }
         }
     }

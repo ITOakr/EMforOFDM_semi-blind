@@ -131,7 +131,7 @@ private:
         symbol_(1) = 1.0;
     }
 
-    // パイロットシンボルからｈの初期値を得る
+        // パイロットシンボルからｈの初期値を得る
     void seth_l_byPilot()
     {
         X_l = X_.row(0).asDiagonal();

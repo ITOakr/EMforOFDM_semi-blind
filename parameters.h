@@ -13,8 +13,8 @@ struct SimulationParameters
     const double Ts_ = T_ + Tgi_;               // シンボル全体の長さ
     const int NUMBER_OF_FFT = 64;               // FFTポイント数(IEEE802.11a)
     const int NUMBER_OF_PILOT = 1;              // パイロットシンボル個数
-    const int NUMBER_OF_SYMBOLS = 4;            // 変調方式に合わせて(BPSKの例)
-    const int NUMBER_OF_BIT = 2;                // 変調方式に合わせて(BPSKの例)
+    const int NUMBER_OF_SYMBOLS = 2;            // 変調方式に合わせて(BPSKの例)
+    const int NUMBER_OF_BIT = 1;                // 変調方式に合わせて(BPSKの例)
     int seed = 100;
 };
 
