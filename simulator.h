@@ -55,7 +55,7 @@ public:
      * ドップラー周波数設定
      * @param f_d ドップラー周波数
      */
-    void setDopplerFrequence(double fd_Ts)
+    void setDopplerFrequency(double fd_Ts)
     {
         fd_Ts_ = fd_Ts;
     }
