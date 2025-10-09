@@ -16,8 +16,8 @@ static const int EbN0dBmax = 30;
 static const int EbN0dBstp = 5;
 
 static const int dopplerMin = 0;
-static const int dopplerMax = 25000;
-static const int dopplerStep = 5000;
+static const double dopplerMax = 0.1;
+static const double dopplerStep = 0.01;
 
 // ファイル
 std::string fileName;       // ファイル名
@@ -56,9 +56,8 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" << std::endl;
 		std::cin >> dopplerFrequency;
 
-		fileName = "f_d*T_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0.csv";
+		fileName = "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0.csv";
 		ofs.open(fileName);
-		ofs << "EbN0[dB],BER" << std::endl; // CSVヘッダを書き込み
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
 			sim.setDopplerFrequency(dopplerFrequency);
@@ -80,7 +79,6 @@ int main()
 
 		fileName = "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler.csv";
 		ofs.open(fileName);
-		ofs << "Doppler_Frequency[Hz],BER" << std::endl; // CSVヘッダを書き込み
 
 		sim.setNoiseSD(fixedEbN0dB);
 
