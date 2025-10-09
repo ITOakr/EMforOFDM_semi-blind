@@ -27,7 +27,7 @@ std::ofstream ofs;        // 出力ファイル
 double ber;
 
 // ドップラー周波数
-double dopplerFrequence;
+double dopplerFrequency;
 
 // 試行回数
 int numberOfTrials;
@@ -52,16 +52,16 @@ int main()
 	if (mode_select == 1)
 	{
 		// --- モード1: Eb/N0スイープ ---
-		double dopplerFrequence;
+		double dopplerFrequency;
 		std::cout << "Enter normalized Doppler f_d*T_s:" << std::endl;
-		std::cin >> dopplerFrequence;
+		std::cin >> dopplerFrequency;
 
-		fileName = "f_d*T_s =" + std::to_string(dopplerFrequence) + "_BER_vs_EbN0.csv";
+		fileName = "f_d*T_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0.csv";
 		ofs.open(fileName);
 		ofs << "EbN0[dB],BER" << std::endl; // CSVヘッダを書き込み
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
-			sim.setDopplerFrequency(dopplerFrequence);
+			sim.setDopplerFrequency(dopplerFrequency);
 			sim.setNoiseSD(EbN0dB);
 			
 			ber = sim.getBER_EM_Simulation();
@@ -90,8 +90,8 @@ int main()
 			ber = sim.getBER_EM_Simulation();
 			
 			std::cout << "-----------" << std::endl;
-			std::cout << "f_d = " << dopplerFrequence << ", BER = " << ber << std::endl;
-			ofs << dopplerFrequence << "," << ber << std::endl;
+			std::cout << "f_d = " << dopplerFrequency << ", BER = " << ber << std::endl;
+			ofs << dopplerFrequency << "," << ber << std::endl;
 		}
 	}
 	else
