@@ -61,7 +61,7 @@ int main()
 		ofs << "EbN0[dB],BER" << std::endl; // CSVヘッダを書き込み
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
-			sim.setDopplerFrequence(dopplerFrequence);
+			sim.setDopplerFrequency(dopplerFrequence);
 			sim.setNoiseSD(EbN0dB);
 			
 			ber = sim.getBER_EM_Simulation();
@@ -84,9 +84,9 @@ int main()
 
 		sim.setNoiseSD(fixedEbN0dB);
 
-		for (double dopplerFrequence = dopplerMin; dopplerFrequence <= dopplerMax; dopplerFrequence += dopplerStep) {
-			sim.setDopplerFrequence(dopplerFrequence);
-			
+		for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; dopplerFrequency += dopplerStep) {
+			sim.setDopplerFrequency(dopplerFrequency);
+
 			ber = sim.getBER_EM_Simulation();
 			
 			std::cout << "-----------" << std::endl;
