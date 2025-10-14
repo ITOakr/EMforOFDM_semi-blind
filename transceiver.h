@@ -25,10 +25,13 @@ public:
         X_bar.setZero(params_.K_, params_.K_);
         R_moment.setZero(params_.K_, params_.K_);
         h_l.resize(params_.Q_);
+        grayNum_.resize(params_.NUMBER_OF_SYMBOLS);
 
         unitIntUniformRand_.init(0, params_.NUMBER_OF_SYMBOLS - 1, params_.seed);
         unitCNormalRand_.init(0.0, 1.0 / sqrt(2.0), params_.seed);
 
+        // グレイ符号のテーブルを作成
+        setGrayNum();
         // シンボル設計とDFT行列設定
         setSymbol();
         setW_();
@@ -81,7 +84,7 @@ public:
         {
             for (int k = 0; k < params_.K_; k++)
             {
-                count += hammingDistance(txData_(l, k), rxData_(l, k));
+                count += hammingDistance(grayNum_[txData_(l, k)], grayNum_[rxData_(l, k)]);
             }
         }
         return count;
@@ -89,6 +92,7 @@ public:
 
 private:
     const SimulationParameters &params_;
+    std::vector<int> grayNum_;
 
     Eigen::MatrixXcd W_;
     Eigen::MatrixXi txData_;
@@ -125,10 +129,40 @@ private:
     /**
      * シンボル生成
      */
-    void setSymbol()
-    {
-        symbol_(0) = -1.0;
-        symbol_(1) = 1.0;
+    void setSymbol() {
+        int M = params_.NUMBER_OF_SYMBOLS;               // シンボル数 (M = 2^NUMBER_OF_BIT)
+        int sqrtM = sqrt(M);                    // 実部/虚部のレベル数 (例: 16QAMならsqrtM=4)
+        double P = 1.0 / (2.0 * (M - 1) / 3.0);
+
+        // シンボル設計
+        int i = 0;
+        for (int v1 = 0; v1 < sqrtM; v1++) {
+            for (int v2 = 0; v2 < sqrtM; v2++) {
+                symbol_(i).real((2 * v1 - (sqrtM - 1)) * sqrt(P));  // 実部
+                if (v1 % 2 == 0) {  // v1が偶数のときは通常の配置
+                    symbol_(i).imag((2 * v2 - (sqrtM - 1)) * sqrt(P));  // 虚部
+                } else {  // v1が奇数のとき、虚部の値を逆順にする
+                    symbol_(i).imag(((sqrtM - 1) - 2 * v2) * sqrt(P));
+                }
+                i++;
+            }
+        }
+    }
+
+    /**
+     * グレイ符号の生成 (追加)
+     */
+    int grayCode(int num) {
+        return num ^ (num >> 1);
+    }
+
+    /**
+     * グレイ符号のテーブルを作成 (追加)
+     */
+    void setGrayNum() {
+        for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++) {
+            grayNum_[i] = grayCode(i);
+        }
     }
 
         // パイロットシンボルからｈの初期値を得る
