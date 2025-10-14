@@ -32,9 +32,27 @@ double dopplerFrequency;
 // 試行回数
 int numberOfTrials;
 
+std::string getModulationSchemeName(int numberOfBits) {
+    switch (numberOfBits) {
+        case 1: return "BPSK";
+        case 2: return "QPSK";
+        case 4: return "16QAM";
+        case 6: return "64QAM";
+        case 8: return "256QAM";
+        default: return "Unknown";
+    }
+}
+
 int main()
 {
 	SimulationParameters params;
+
+    std::cout << "--------------------------------------------------------------------" << std::endl;
+	std::cout << "Number of Bit? (BPSK:1, QPSK:2, 16QAM:4, 64QAM:6, 256QAM:8)" << std::endl;
+	std::cout << "--------------------------------------------------------------------" << std::endl;
+	std::cin >> params.NUMBER_OF_BIT;
+	params.NUMBER_OF_SYMBOLS = std::pow(2, params.NUMBER_OF_BIT);
+
 	Simulator sim(params);
 
 	int mode_select = 0;
@@ -49,14 +67,16 @@ int main()
 	std::cin >> numberOfTrials;
 	sim.setTrialNum(numberOfTrials);
 
+    std::string modulationName = getModulationSchemeName(params.NUMBER_OF_BIT);
+
 	if (mode_select == 1)
 	{
 		// --- モード1: Eb/N0スイープ ---
 		double dopplerFrequency;
-		std::cout << "Enter normalized Doppler f_d*T_s:" << std::endl;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0.csv";
+		fileName = modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
@@ -77,7 +97,7 @@ int main()
 		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
 		std::cin >> fixedEbN0dB;
 
-		fileName = "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler.csv";
+		fileName = modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler.csv";
 		ofs.open(fileName);
 
 		sim.setNoiseSD(fixedEbN0dB);
