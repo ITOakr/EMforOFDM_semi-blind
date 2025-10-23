@@ -26,6 +26,8 @@ std::ofstream ofs;        // 出力ファイル
 // BER
 double ber;
 
+double avgPower;
+
 // ドップラー周波数
 double dopplerFrequency;
 
@@ -34,7 +36,6 @@ int numberOfTrials;
 
 std::string getModulationSchemeName(int numberOfBits) {
     switch (numberOfBits) {
-        case 1: return "BPSK";
         case 2: return "QPSK";
         case 4: return "16QAM";
         case 6: return "64QAM";
@@ -48,7 +49,7 @@ int main()
 	SimulationParameters params;
 
     std::cout << "--------------------------------------------------------------------" << std::endl;
-	std::cout << "Number of Bit? (BPSK:1, QPSK:2, 16QAM:4, 64QAM:6, 256QAM:8)" << std::endl;
+	std::cout << "Number of Bit? (QPSK:2, 16QAM:4, 64QAM:6, 256QAM:8)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> params.NUMBER_OF_BIT;
 	params.NUMBER_OF_SYMBOLS = std::pow(2, params.NUMBER_OF_BIT);
@@ -60,6 +61,10 @@ int main()
 	std::cout << "Select Simulation Mode" << std::endl;
 	std::cout << "1: Eb/N0 sweep (fixed Doppler)" << std::endl;
 	std::cout << "2: Doppler sweep (fixed Eb/N0)" << std::endl;
+    std::cout << "3: MSE Simulation" << std::endl;
+    std::cout << "4: Average Power Simulation" << std::endl;
+	std::cout << "5: only pilot Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "6: MSE Simulation pilot" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -76,7 +81,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0.csv";
+		fileName = modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0_2path.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
@@ -97,7 +102,7 @@ int main()
 		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
 		std::cin >> fixedEbN0dB;
 
-		fileName = modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler.csv";
+		fileName = modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler_2path.csv";
 		ofs.open(fileName);
 
 		sim.setNoiseSD(fixedEbN0dB);
@@ -110,6 +115,90 @@ int main()
 			std::cout << "-----------" << std::endl;
 			std::cout << "f_d = " << dopplerFrequency << ", BER = " << ber << std::endl;
 			ofs << dopplerFrequency << "," << ber << std::endl;
+		}
+	}
+    else if (mode_select == 3)
+	{
+		// --- モード3: Eb/N0スイープ ---
+		double dopplerFrequency;
+        double mse;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "MSE_2path.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			mse = sim.getMSE_simulation();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
+	}
+    else if (mode_select == 4)
+    {
+        // --- モード4: 平均電力計算 ---
+        double dopplerFrequency;
+        std::cout << "Enter normalized Doppler f_d*T_s:" ;
+        std::cin >> dopplerFrequency;
+
+        sim.setDopplerFrequency(dopplerFrequency);
+        
+        avgPower = sim.getAveragePower_simulation();
+        
+        std::cout << "--------------------------------------------------------------------" << std::endl;
+        std::cout << "Average power of the true channel response H over " << numberOfTrials << " trials." << std::endl;
+        std::cout << "f_d*T_s = " << dopplerFrequency << ", Average Power = " << avgPower << std::endl;
+        std::cout << "--------------------------------------------------------------------" << std::endl;
+
+        // このモードではファイル出力はせず、コンソール表示のみとします。
+        return 0; // 結果を表示して終了
+    }
+	if (mode_select == 5)
+	{
+		// --- モード1: Eb/N0スイープ ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0_2path_pilot.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			ber = sim.getBER_Simulation_only_pilot();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", BER = " << ber << std::endl;
+			ofs << EbN0dB << "," << ber << std::endl;
+		}
+	}
+	else if (mode_select == 6)
+	{
+		// --- モード3: Eb/N0スイープ ---
+		double dopplerFrequency;
+        double mse;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "MSE_pilot.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			mse = sim.getMSE_simulation_only_pilot();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
 		}
 	}
 	else

@@ -78,6 +78,77 @@ public:
         return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
     }
 
+    /**
+     * チャネル推定のMSEを計算するシミュレーション
+     * @return MSEのシミュレーション値
+     */
+    double getMSE_simulation()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+            transceiver_.equalizeAndDemodulate(noiseSD_); // この中でH_estが計算・保存される
+            totalSquaredError += transceiver_.getMSE();
+        }
+        // 試行回数、データシンボル数、サブキャリア数で平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+    }
+
+    /**
+     * @brief 全試行回数における伝送路の平均電力を計算するシミュレーション
+     * @return double 平均電力
+     */
+    double getAveragePower_simulation()
+    {
+        double totalPower = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            channel_.generateFrequencyResponse(fd_Ts_);
+            totalPower += channel_.getAveragePower();
+        }
+        return totalPower / (double)NUMBER_OF_TRIAL;
+    }
+
+    /**
+     * 数値計算実験
+     * @return パイロットシンボルのみをもちいたビット誤り率のシミュレーション値
+     */
+    double getBER_Simulation_only_pilot()
+    {
+        int totalErrorCount = 0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+            transceiver_.equalizeByPilotAndDemodulate(noiseSD_);
+            totalErrorCount += transceiver_.getBitErrorCount();
+        }
+        return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+    }
+
+    /**
+     * チャネル推定のMSEを計算するシミュレーション
+     * @return パイロットシンボルのみを用いたMSEのシミュレーション値
+     */
+    double getMSE_simulation_only_pilot()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+            transceiver_.equalizeByPilotAndDemodulate(noiseSD_); // この中でH_estが計算・保存される
+            totalSquaredError += transceiver_.getMSE();
+        }
+        // 試行回数、データシンボル数、サブキャリア数で平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+    }
+
 private:
     SimulationParameters params_;
     Channel channel_;
