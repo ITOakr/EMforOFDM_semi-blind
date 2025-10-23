@@ -39,6 +39,16 @@ public:
         {
             H_.row(l) = (W_ * h_.row(l).transpose()).transpose();
         }
+        // std::cout << H_ << std::endl;
+    }
+
+    /**
+     * @brief 1フレーム分のH_の平均電力を計算する
+     * @return double 平均電力
+     */
+    double getAveragePower()
+    {
+        return H_.squaredNorm() / H_.size();
     }
 
     // H_ を外部から参照するための getter メソッド
@@ -140,6 +150,7 @@ private:
             for (auto l = 0; l < params_.L_; l++)
             {
                 h_(l, q) = h_q(l);
+                // std::cout << l << "=" << h_ << std::endl;
             }
         }
     }

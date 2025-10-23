@@ -5,7 +5,7 @@
 // シミュレーションのパラメータをまとめた構造体
 struct SimulationParameters
 {
-    const int K_ = 52;                          // サブキャリア数 K52
+    const int K_ = 4;                          // サブキャリア数 K52
     const int L_ = 10;                           // 1フレームのシンボル数 L
     const int Q_ = 2;                           // 伝送路のインパルス応答のパス数 Q
     const double T_ = 3.2 * std::pow(10, -6);   // 有効シンボル長 T
