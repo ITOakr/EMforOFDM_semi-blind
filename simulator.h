@@ -60,6 +60,11 @@ public:
         fd_Ts_ = fd_Ts;
     }
 
+    double getAverageIterations() const
+    {
+        return last_avg_iterations_;
+    }
+
     /**
      * 数値計算実験
      * @return ビット誤り率のシミュレーション値
@@ -67,14 +72,17 @@ public:
     double getBER_EM_Simulation()
     {
         int totalErrorCount = 0;
+        double total_iterations_sum = 0.0;
         for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
         {
             transceiver_.setX_();
             channel_.generateFrequencyResponse(fd_Ts_);
             transceiver_.setY_(channel_.getH(), noiseSD_);
-            transceiver_.equalizeAndDemodulate(noiseSD_);
+            double trial_avg_iter = transceiver_.equalizeAndDemodulate(noiseSD_);
             totalErrorCount += transceiver_.getBitErrorCount();
+            total_iterations_sum += trial_avg_iter;
         }
+        last_avg_iterations_ = total_iterations_sum / static_cast<double>(NUMBER_OF_TRIAL);
         return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
     }
 
@@ -157,6 +165,8 @@ private:
     double noiseSD_;     // 雑音の標準偏差
     int NUMBER_OF_TRIAL; // 試行回数
     double fd_Ts_;         // 正規化ドップラー (f_d * T_s): 単位なし
+
+    double last_avg_iterations_ = 0.0;
 };
 
 #endif /* SIMULATOR_H */

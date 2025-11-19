@@ -16,12 +16,13 @@ static const int EbN0dBmax = 30;
 static const int EbN0dBstp = 5;
 
 static const int dopplerMin = 0;
-static const double dopplerMax = 0.1;
-static const double dopplerStep = 0.01;
+static const double dopplerMax = 0.002;
+static const double dopplerStep = 0.0002;
 
 // ファイル
 std::string fileName;       // ファイル名
 std::ofstream ofs;        // 出力ファイル  
+const std::string outputDir = "C:/Users/Akira Ito/code2025/results/2path_L=2_iter_symbol/";
 
 // BER
 double ber;
@@ -81,7 +82,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0_2path.csv";
+		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0_2path.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
@@ -89,9 +90,11 @@ int main()
 			sim.setNoiseSD(EbN0dB);
 			
 			ber = sim.getBER_EM_Simulation();
+			double avg_iter = sim.getAverageIterations();
 			
 			std::cout << "-----------" << std::endl;
 			std::cout << "EbN0dB = " << EbN0dB << ", BER = " << ber << std::endl;
+			std::cout << "Avg_Iteration = " << avg_iter << std::endl;
 			ofs << EbN0dB << "," << ber << std::endl;
 		}
 	}
@@ -102,7 +105,7 @@ int main()
 		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
 		std::cin >> fixedEbN0dB;
 
-		fileName = modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler_2path.csv";
+		fileName = outputDir + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler_2path.csv";
 		ofs.open(fileName);
 
 		sim.setNoiseSD(fixedEbN0dB);
@@ -125,7 +128,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "MSE_2path.csv";
+		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "MSE_2path.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
@@ -165,7 +168,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0_2path_pilot.csv";
+		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0_2path_pilot.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
@@ -187,7 +190,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "MSE_pilot.csv";
+		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "MSE_pilot.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {

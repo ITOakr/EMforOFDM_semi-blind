@@ -1,6 +1,8 @@
 #ifndef TRANSCEIVER_H
 #define TRANSCEIVER_H
 
+#include <stdexcept> // (ファイルの先頭に追加)
+#include <string>    // (エラーメッセージ構築のため)
 #include <C:\Users\Akira Ito\eigen-3.4.0\Eigen\Eigen>
 #include <C:\Users\Akira Ito\eigen-3.4.0\Eigen\Dense>
 #include "parameters.h"
@@ -79,10 +81,11 @@ public:
     }
 
     // EMアルゴリズムによる等化と復調
-    void equalizeAndDemodulate(double noiseSD)
+    double equalizeAndDemodulate(double noiseSD)
     {
-        equalizeChannelWithEM(noiseSD);
+        double avg_iter = equalizeChannelWithEM(noiseSD);
         setRxDataByML();
+        return avg_iter;
     }
 
     /**
@@ -198,16 +201,7 @@ private:
     void seth_l_byPilot()
     {
         X_l = X_.row(0).asDiagonal();
-        // // ▼▼▼ 正則化を追加 ▼▼▼
-        // Eigen::MatrixXcd A = W_est_.adjoint() * X_l.adjoint() * X_l * W_est_;
-        // double delta = 1e-10; // 正則化のための微小な値
-        // Eigen::MatrixXcd I = Eigen::MatrixXcd::Identity(A.rows(), A.cols());
-        // h_l = (A + delta * I).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
-        // // ▲▲▲ 正則化を追加 ▲▲▲
-
-        // std::cout << "Y_.row(0).transpose()" << Y_.row(0).transpose() << std::endl;
         h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
-        // std::cout << "h_l_by_p=" << h_l << std::endl;
     }
 
     void equalizeChannelWithPilot(double noiseSD)
@@ -225,33 +219,76 @@ private:
         }
     }
 
-    void equalizeChannelWithEM(double noiseSD)
+    double equalizeChannelWithEM(double noiseSD)
     {
         seth_l_byPilot();
 
         H_est_.row(0) = (W_est_ * h_l).transpose();
 
-        // std::cout << H_est_ << std::endl;
+        const int MAX_ITER = 100;
+        const int MIN_ITER = 3;
 
-        const int MAX_ITER = 5;
+        Eigen::VectorXi symbol_prev2(params_.K_);
+        Eigen::VectorXi symbol_prev1(params_.K_);
+        Eigen::VectorXi symbol_current(params_.K_);
+
+        Eigen::VectorXd obj(params_.NUMBER_OF_SYMBOLS);
+
+        int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
+        Eigen::VectorXd iter_counts(dataSymbolCount);
+
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
         {
+            symbol_prev2.setConstant(-1);
+            symbol_prev1.setConstant(-1);
+
+            int current_iter_count = 0;
+
             for (int iter = 0; iter < MAX_ITER; iter++)
             {
+                current_iter_count = iter + 1;
                 // Eステップ
                 Estep(l, noiseSD);
                 // Mステップ
                 Mstep(l);
+
+                for (int k = 0; k < params_.K_; k++)
+                {
+                    std::complex<double> H_current_k = (W_est_.row(k) *h_l)(0);
+                    std::complex<double> R_current_k = Y_(l, k) / H_current_k;
+
+                    for(int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++){
+                        obj(i) = std::norm(R_current_k - symbol_(i));
+                    }
+                    Eigen::VectorXd::Index minColumn;
+                    obj.minCoeff(&minColumn);
+                    symbol_current(k) = minColumn;
+                }
+
+                if (iter >= MIN_ITER - 1)
+                {
+                    bool converged = (symbol_current == symbol_prev1) && (symbol_prev1 == symbol_prev2);
+                    if (converged){
+                        break;
+                    }
+                }
+                symbol_prev2 = symbol_prev1;
+                symbol_prev1 = symbol_current;
             }
 
+            iter_counts(l - params_.NUMBER_OF_PILOT) = static_cast<double>(current_iter_count);
+
             H_est_.row(l) = (W_est_ * h_l).transpose();
-            // std::cout << "L=" << l << ":" << h_l << std::endl;
             for (int k = 0; k < params_.K_; k++)
             {
                 R_(l, k) = Y_(l, k) / (W_est_.row(k) * h_l)(0);
             }
         }
-        // std::cout << "H_est_=" << H_est_ << std::endl;
+        if(iter_counts.size() == 0){
+            return 0.0;
+        }
+
+        return iter_counts.mean();
     }
 
     void Estep(int l, double noiseSD)
@@ -286,12 +323,19 @@ private:
             }
 
             if (sumxP_shifted <= 0.0) {
-                 // 稀にすべてのexpの結果が0になった場合 (非常に考えにくいが念のため)
-                 // 等確率を割り当てる
-                 posterior_prob.fill(1.0 / static_cast<double>(params_.NUMBER_OF_SYMBOLS));
-                 if (k == 0) { // デバッグ用にメッセージ表示
-                      std::cerr << "Warning: sumxP_shifted is zero or negative at l=" << l << ", k=" << k << ". Assigning equal probabilities." << std::endl;
-                 }
+                // 稀にすべてのexpの結果が0になった場合 (非常に考えにくいが念のため)
+                //  posterior_prob.fill(1.0 / static_cast<double>(params_.NUMBER_OF_SYMBOLS));
+                //  if (k == 0) { // デバッグ用にメッセージ表示
+                //       std::cerr << "Warning: sumxP_shifted is zero or negative at l=" << l << ", k=" << k << ". Assigning equal probabilities." << std::endl;
+                    // エラーメッセージを構築
+                std::string error_msg = "FATAL ERROR: sumxP_shifted is zero or negative at l=" 
+                          + std::to_string(l) + ", k=" + std::to_string(k);
+
+                // どの場所でエラーが起きたかコンソールに表示
+                std::cerr << error_msg << std::endl;
+                
+                // 例外を投げてプログラムを停止させます
+                throw std::runtime_error(error_msg);   
             } else {
                  // 通常の正規化
                  posterior_prob /= sumxP_shifted;
