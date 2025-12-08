@@ -12,6 +12,8 @@
 #include "parameters.h"
 #include "channel.h"
 #include "transceiver.h"
+#include <fstream>    // std::ofstream のために追加
+#include <complex>    // std::abs(std::complex) のために追加
 
 class Simulator
 {
@@ -155,6 +157,32 @@ public:
         }
         // 試行回数、データシンボル数、サブキャリア数で平均化
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+    }
+
+    void saveChannelMagnitudeResponseToCSV(std::ofstream& ofs, double fd_Ts)
+    {
+        // 1. チャネルの生成（1試行のみ）
+        channel_.generateFrequencyResponse(fd_Ts);
+
+        // 2. 周波数応答Hを取得
+        const auto& H = channel_.getH(); // Hの型は、ユーザーのChannelクラスの実装に依存します
+        
+        // Hのサイズは params_.K_ (サブキャリア数) x params_.L_ (シンボル数) であると仮定
+        int K = params_.K_; // サブキャリア数
+        int L = params_.L_; // シンボル数 (全シンボル)
+
+        // CSVヘッダ: k,l,Magnitude
+        ofs << "l,k,Magnitude" << std::endl;
+
+        for (int l = 0; l < L; ++l) // 時刻インデックス (0からL-1)
+        {
+            for (int k = 0; k < K; ++k) // 周波数インデックス (0からK-1)
+            {
+                double magnitude = std::abs(H(l, k));
+
+                ofs << l << "," << k << "," << magnitude << std::endl;
+            }
+        }
     }
 
 private:
