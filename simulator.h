@@ -80,7 +80,7 @@ public:
             transceiver_.setX_();
             channel_.generateFrequencyResponse(fd_Ts_);
             transceiver_.setY_(channel_.getH(), noiseSD_);
-            double trial_avg_iter = transceiver_.equalizeAndDemodulate(noiseSD_);
+            double trial_avg_iter = transceiver_.equalizeAndDemodulate();
             totalErrorCount += transceiver_.getBitErrorCount();
             total_iterations_sum += trial_avg_iter;
         }
@@ -100,7 +100,7 @@ public:
             transceiver_.setX_();
             channel_.generateFrequencyResponse(fd_Ts_);
             transceiver_.setY_(channel_.getH(), noiseSD_);
-            transceiver_.equalizeAndDemodulate(noiseSD_); // この中でH_estが計算・保存される
+            transceiver_.equalizeAndDemodulate(); // この中でH_estが計算・保存される
             totalSquaredError += transceiver_.getMSE();
         }
         // 試行回数、データシンボル数、サブキャリア数で平均化
@@ -134,7 +134,7 @@ public:
             transceiver_.setX_();
             channel_.generateFrequencyResponse(fd_Ts_);
             transceiver_.setY_(channel_.getH(), noiseSD_);
-            transceiver_.equalizeByPilotAndDemodulate(noiseSD_);
+            transceiver_.equalizeByPilotAndDemodulate();
             totalErrorCount += transceiver_.getBitErrorCount();
         }
         return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
@@ -152,7 +152,7 @@ public:
             transceiver_.setX_();
             channel_.generateFrequencyResponse(fd_Ts_);
             transceiver_.setY_(channel_.getH(), noiseSD_);
-            transceiver_.equalizeByPilotAndDemodulate(noiseSD_); // この中でH_estが計算・保存される
+            transceiver_.equalizeByPilotAndDemodulate(); // この中でH_estが計算・保存される
             totalSquaredError += transceiver_.getMSE();
         }
         // 試行回数、データシンボル数、サブキャリア数で平均化

@@ -28,9 +28,10 @@ public:
         symbol_.resize(params_.NUMBER_OF_SYMBOLS);
         xPro.resize(params_.NUMBER_OF_SYMBOLS);
         X_bar.setZero(params_.K_, params_.K_);
-        R_moment.setZero(params_.K_, params_.K_);
         h_l.resize(est_params_.Q_est);
         grayNum_.resize(params_.NUMBER_OF_SYMBOLS);
+
+        noiseVariance_ = 0.0;
 
         unitIntUniformRand_.init(0, params_.NUMBER_OF_SYMBOLS - 1, params_.seed);
         unitCNormalRand_.init(0.0, 1.0 / sqrt(2.0), params_.seed);
@@ -74,16 +75,16 @@ public:
     }
 
     // pilot信号による等化と復調
-    void equalizeByPilotAndDemodulate(double noiseSD)
+    void equalizeByPilotAndDemodulate()
     {
-        equalizeChannelWithPilot(noiseSD);
+        equalizeChannelWithPilot();
         setRxDataByML();
     }
 
     // EMアルゴリズムによる等化と復調
-    double equalizeAndDemodulate(double noiseSD)
+    double equalizeAndDemodulate()
     {
-        double avg_iter = equalizeChannelWithEM(noiseSD);
+        double avg_iter = equalizeChannelWithEM();
         setRxDataByML();
         return avg_iter;
     }
@@ -137,8 +138,8 @@ private:
     Eigen::MatrixXcd H_true_;
     Eigen::VectorXd xPro;
     Eigen::MatrixXcd X_bar;
-    Eigen::MatrixXd R_moment;
     Eigen::VectorXcd h_l;
+    double noiseVariance_;
     uniform_int_distribution<> unitIntUniformRand_;
     cnormal_distribution<> unitCNormalRand_;
 
@@ -198,15 +199,16 @@ private:
     }
 
         // パイロットシンボルからｈの初期値を得る
-    void seth_l_byPilot()
+    void set_initial_params_by_pilot()
     {
         X_l = X_.row(0).asDiagonal();
         h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
+        noiseVariance_ = (Y_.row(0).transpose() - X_l * W_est_ * h_l).squaredNorm() / (double)params_.K_;
     }
 
-    void equalizeChannelWithPilot(double noiseSD)
+    void equalizeChannelWithPilot()
     {
-        seth_l_byPilot();
+        set_initial_params_by_pilot();
         H_est_.row(0) = (W_est_ * h_l).transpose();
 
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
@@ -219,9 +221,9 @@ private:
         }
     }
 
-    double equalizeChannelWithEM(double noiseSD)
+    double equalizeChannelWithEM()
     {
-        seth_l_byPilot();
+        set_initial_params_by_pilot();
 
         H_est_.row(0) = (W_est_ * h_l).transpose();
 
@@ -248,7 +250,7 @@ private:
             {
                 current_iter_count = iter + 1;
                 // Eステップ
-                Estep(l, noiseSD);
+                Estep(l);
                 // Mステップ
                 Mstep(l);
 
@@ -291,11 +293,11 @@ private:
         return iter_counts.mean();
     }
 
-    void Estep(int l, double noiseSD)
+    void Estep(int l)
     {
         // std::cout << "h_l=" << h_l << std::endl;
         Eigen::VectorXcd H_current = W_est_ * h_l;
-        double variance = noiseSD * noiseSD;
+        double variance = noiseVariance_;
         // std::cout << "H_current=" << H_current << std::endl;
         // varianceが非常に小さい場合のアンダーフロー対策（ゼロ除算を避ける）
         if (variance < std::numeric_limits<double>::epsilon()) {
@@ -350,21 +352,16 @@ private:
                 expected_X_norm_sq += posterior_prob(i) * std::norm(symbol_(i));
             }
             X_bar(k, k) = expected_X;
-            R_moment(k, k) = expected_X_norm_sq;
         }
     }
 
     void Mstep(int l)
     {
-        // // ▼▼▼ 正則化を追加 ▼▼▼
-        Eigen::MatrixXcd A = W_est_.adjoint() * R_moment * W_est_;
-        // double delta = 1e-10; // 正則化のための微小な値
-        // Eigen::MatrixXcd I = Eigen::MatrixXcd::Identity(A.rows(), A.cols());
-        // h_l = (A + delta * I).inverse() * W_est_.adjoint() * X_bar.adjoint() * Y_.row(l).transpose();
-        // // ▲▲▲ 正則化を追加 ▲▲▲
-        h_l = (W_est_.adjoint() * R_moment * W_est_).inverse() * W_est_.adjoint() * X_bar.adjoint() * Y_.row(l).transpose();
+        Eigen::MatrixXcd A = X_bar * W_est_;
+        h_l = (A.adjoint() * A).inverse() * A.adjoint() * Y_.row(l).transpose();
         // std::cout << "h_l=" << h_l << std::endl;
         // std::cout << "A=" << A << std::endl;
+        noiseVariance_ = (Y_.row(l).transpose() - A * h_l).squaredNorm() / (double)params_.K_;
     }
 
     /**
