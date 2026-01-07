@@ -159,6 +159,42 @@ public:
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
     }
 
+    /**
+     * 雑音分散のMSEを計算するシミュレーション
+     * @param fixedEbN0dB 固定するEb/N0 [dB]
+     * @return 雑音分散MSEのシミュレーション値
+     */
+    double getNoiseVarianceMSE_simulation(int fixedEbN0dB)
+    {
+        // setNoiseSD() のロジックを逆算し、真の雑音分散 σ_n^2 を計算
+        // σ_n = sqrt(10^(-0.1 * EbN0dB) / NUMBER_OF_BIT)
+        // σ_n^2 = 10^(-0.1 * EbN0dB) / NUMBER_OF_BIT
+        double true_noise_variance = noiseSD_ * noiseSD_;
+
+        double totalSquaredError = 0.0;
+        
+        // setNoiseSD(fixedEbN0dB) は main.cpp で事前に呼び出されている必要があります。
+        
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+            // equalizeAndDemodulate の中で noiseVariance_ (推定値) が更新される
+            transceiver_.equalizeAndDemodulate(); 
+            
+            // 推定値を取得
+            double est_noise_variance = transceiver_.getEstimatedNoiseVariance(); //
+            
+            // MSEの累積: (推定値 - 真値)^2
+            double mse_trial = std::pow(est_noise_variance - true_noise_variance, 2.0);
+            totalSquaredError += mse_trial;
+        }
+        
+        // 試行回数で平均化
+        return totalSquaredError / (double)NUMBER_OF_TRIAL;
+    }
+
     void saveChannelMagnitudeResponseToCSV(std::ofstream& ofs, double fd_Ts)
     {
         // 1. チャネルの生成（1試行のみ）
@@ -183,6 +219,36 @@ public:
                 ofs << l << "," << k << "," << magnitude << std::endl;
             }
         }
+    }
+
+    double get_h_MSE_Simulation_during_pilot()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+            transceiver_.est_H_by_initial_h(); // この中でH_estが計算・保存される
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 試行回数、データシンボル数、サブキャリア数で平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    double get_H_est_MSE_Simulation_during_pilot()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+            transceiver_.est_H_by_pilot(); // この中でH_estが計算・保存される
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 試行回数、データシンボル数、サブキャリア数で平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
     }
 
 private:

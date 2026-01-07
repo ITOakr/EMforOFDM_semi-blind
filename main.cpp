@@ -27,6 +27,9 @@ const std::string outputDir = "C:/Users/Akira Ito/code2025/results/2path_L=11_it
 // BER
 double ber;
 
+// MSE
+double mse;
+
 double avgPower;
 
 // ドップラー周波数
@@ -70,6 +73,9 @@ int main()
 	std::cout << "8: MSE Doppler sweep (fixed Eb/N0)" << std::endl;
 	std::cout << "9: MSE Doppler sweep only pilot (fixed Eb/N0)" << std::endl;
 	std::cout << "10: Channel Magnitude Response (|H(k, l)|) CSV Output" << std::endl;
+	std::cout << "11: Noise Variance MSE Doppler sweep (fixed Eb/N0)" << std::endl;
+	std::cout << "12: H MSE by initial h_est Doppler sweep (fixed Eb/N0)" << std::endl;
+	std::cout << "13: H MSE by initial H_est Doppler sweep (fixed Eb/N0)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -296,6 +302,76 @@ int main()
 		std::cout << "--------------------------------------------------------------------" << std::endl;
 		std::cout << "Channel magnitude response saved to: " << fileName << std::endl;
 		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+	else if (mode_select == 11)
+	{
+		// --- モード11: 雑音分散 MSE vs ドップラー周波数スイープ ---
+		int fixedEbN0dB;
+		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+		std::cin >> fixedEbN0dB;
+
+		fileName = outputDir + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_NoiseVar_MSE_vs_Doppler_2path.csv";
+		ofs.open(fileName);
+
+		// シミュレータにノイズSDを設定（データ生成用）
+		sim.setNoiseSD(fixedEbN0dB);
+		double noise_var_mse;
+        double dopplerFrequency;
+
+		for (dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; dopplerFrequency += dopplerStep) {
+			sim.setDopplerFrequency(dopplerFrequency);
+            
+            // 新しいシミュレーション関数を呼び出す
+			noise_var_mse = sim.getNoiseVarianceMSE_simulation(fixedEbN0dB);
+            
+            double fdTs = dopplerFrequency; // main.cppの他のモードに合わせて、dopplerFrequencyがf_d*T_sの値を表すと仮定
+            
+			std::cout << "-----------" << std::endl;
+			std::cout << "f_dT_s = " << fdTs << ", Noise Var MSE = " << noise_var_mse << std::endl;
+			ofs << fdTs << "," << noise_var_mse << std::endl;
+		}
+	}
+	if (mode_select == 12)
+	{
+		// --- モード12: Eb/N0スイープ,h_est_MSE 式67の確認---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_MSE_vs_EbN0_pilot_h_est_MODE12.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			mse = sim.get_h_MSE_Simulation_during_pilot();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
+	}
+	if (mode_select == 13)
+	{
+		// --- モード13: Eb/N0スイープ,H_est_MSE 式69の確認---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_MSE_vs_EbN0_pilot_H_est_MODE13.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			mse = sim.get_H_est_MSE_Simulation_during_pilot();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
 	}
 	else
 	{
