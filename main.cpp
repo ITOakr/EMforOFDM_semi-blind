@@ -171,7 +171,7 @@ int main()
         // このモードではファイル出力はせず、コンソール表示のみとします。
         return 0; // 結果を表示して終了
     }
-	if (mode_select == 5)
+	else if (mode_select == 5)
 	{
 		// --- モード1: Eb/N0スイープ ---
 		double dopplerFrequency;
@@ -331,7 +331,7 @@ int main()
 			ofs << fdTs << "," << noise_var_mse << std::endl;
 		}
 	}
-	if (mode_select == 12)
+	else if (mode_select == 12)
 	{
 		// --- モード12: Eb/N0スイープ,h_est_MSE 式67の確認---
 		double dopplerFrequency;
@@ -352,7 +352,7 @@ int main()
 			ofs << EbN0dB << "," << mse << std::endl;
 		}
 	}
-	if (mode_select == 13)
+	else if (mode_select == 13)
 	{
 		// --- モード13: Eb/N0スイープ,H_est_MSE 式69の確認---
 		double dopplerFrequency;
