@@ -28,6 +28,7 @@ public:
         symbol_.resize(params_.NUMBER_OF_SYMBOLS);
         xPro.resize(params_.NUMBER_OF_SYMBOLS);
         X_bar.setZero(params_.K_, params_.K_);
+        R_moment.setZero(params_.K_, params_.K_);
         h_l.resize(est_params_.Q_est);
         grayNum_.resize(params_.NUMBER_OF_SYMBOLS);
 
@@ -121,6 +122,39 @@ public:
         return mse;
     }
 
+    /**
+     * チャネル推定のMSEを計算する
+     * @return 1試行あたりの二乗誤差の合計
+     */
+    double getMSE_during_pilot()
+    {
+        double mse = 0.0;
+        // データシンボル区間（パイロットを除く）のMSEを計算
+        mse = (H_true_.row(0) - H_est_.row(0)).squaredNorm();
+        return mse;
+    }
+
+    /**
+     * 推定された雑音分散を取得する
+     * @return 推定された雑音分散 noiseVariance_ の値
+     */
+    double getEstimatedNoiseVariance() const
+    {
+        return noiseVariance_;
+    }
+
+    // パイロットシンボルからhを推定し，Hを得る
+    void est_H_by_initial_h(){
+        set_initial_params_by_pilot();
+        H_est_.row(0) = (W_est_ * h_l).transpose();
+    }
+
+    // パイロットシンボルから直接Hを推定する
+    void est_H_by_pilot(){
+        H_est_.row(0) = (X_.row(0).asDiagonal()).inverse() * Y_.row(0).transpose();
+    }
+
+
 private:
     const SimulationParameters &params_;
     EstimatorParameters est_params_;
@@ -138,6 +172,7 @@ private:
     Eigen::MatrixXcd H_true_;
     Eigen::VectorXd xPro;
     Eigen::MatrixXcd X_bar;
+    Eigen::MatrixXd R_moment;
     Eigen::VectorXcd h_l;
     double noiseVariance_;
     uniform_int_distribution<> unitIntUniformRand_;
@@ -198,7 +233,7 @@ private:
         }
     }
 
-        // パイロットシンボルからｈの初期値を得る
+    // パイロットシンボルからｈの初期値を得る
     void set_initial_params_by_pilot()
     {
         X_l = X_.row(0).asDiagonal();
@@ -352,16 +387,17 @@ private:
                 expected_X_norm_sq += posterior_prob(i) * std::norm(symbol_(i));
             }
             X_bar(k, k) = expected_X;
+            R_moment(k, k) = expected_X_norm_sq;
         }
     }
 
     void Mstep(int l)
     {
         Eigen::MatrixXcd A = X_bar * W_est_;
-        h_l = (A.adjoint() * A).inverse() * A.adjoint() * Y_.row(l).transpose();
+        h_l = (W_est_.adjoint() * R_moment * W_est_).inverse() * (X_bar * W_est_).adjoint() * Y_.row(l).transpose();
         // std::cout << "h_l=" << h_l << std::endl;
         // std::cout << "A=" << A << std::endl;
-        noiseVariance_ = (Y_.row(l).transpose() - A * h_l).squaredNorm() / (double)params_.K_;
+        noiseVariance_ = ((Y_.row(l).transpose() - X_bar * W_est_ * h_l).squaredNorm() + ((W_est_ * h_l).adjoint() * (R_moment - X_bar.adjoint() * X_bar) * W_est_ * h_l).value().real()) / (double)params_.K_;
     }
 
     /**
