@@ -18,7 +18,11 @@
 class Simulator
 {
 public:
-    Simulator(const SimulationParameters &params) : params_(params), channel_(params), transceiver_(params)
+    Simulator(const SimulationParameters &params)
+        : params_(params),
+        W_master_(SimulationParameters::generateW(params.K_, params.Q_, params.NUMBER_OF_FFT)),
+        channel_(params, W_master_),
+        transceiver_(params, W_master_)
     {
     }
 
@@ -253,6 +257,7 @@ public:
 
 private:
     SimulationParameters params_;
+    Eigen::MatrixXcd W_master_;
     Channel channel_;
     Transceiver transceiver_;
 
