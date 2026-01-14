@@ -7,6 +7,10 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 #include "simulator.h"
 #include "parameters.h"
 
@@ -37,6 +41,24 @@ double dopplerFrequency;
 
 // 試行回数
 int numberOfTrials;
+
+std::string getCurrentTimeString() {
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now;
+    
+    // Windows(MSVC)の場合は localtime_s、Linux(GCC)等の場合は localtime_r や localtime を使用
+#if defined(_MSC_VER)
+    localtime_s(&tm_now, &time_t_now);
+#else
+    tm_now = *std::localtime(&time_t_now);
+#endif
+
+    std::ostringstream oss;
+    // フォーマット: YYYYMMDD_HHMMSS (例: 20241220_193600)
+    oss << std::put_time(&tm_now, "%Y%m%d_%H%M%S");
+    return oss.str();
+}
 
 std::string getModulationSchemeName(int numberOfBits) {
     switch (numberOfBits) {
@@ -84,6 +106,7 @@ int main()
 	sim.setTrialNum(numberOfTrials);
 
     std::string modulationName = getModulationSchemeName(params.NUMBER_OF_BIT);
+	std::string timeStr = getCurrentTimeString();
 
 	if (mode_select == 1)
 	{
@@ -92,7 +115,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0_2path.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0_2path.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
@@ -115,7 +138,7 @@ int main()
 		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
 		std::cin >> fixedEbN0dB;
 
-		fileName = outputDir + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler_2path.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler_2path.csv";
 		ofs.open(fileName);
 
 		sim.setNoiseSD(fixedEbN0dB);
@@ -138,7 +161,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "MSE_2path.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "MSE_2path.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
@@ -178,7 +201,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0_2path_pilot.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_BER_vs_EbN0_2path_pilot.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
@@ -200,7 +223,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "MSE_pilot.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "MSE_pilot.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
@@ -222,7 +245,7 @@ int main()
 		std::cin >> fixedEbN0dB;
 
 		// ファイル名の設定
-		fileName = outputDir + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler_2path_only_pilot.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_BER_vs_Doppler_2path_only_pilot.csv";
 		ofs.open(fileName);
 
 		sim.setNoiseSD(fixedEbN0dB);
@@ -244,7 +267,7 @@ int main()
 		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
 		std::cin >> fixedEbN0dB;
 
-		fileName = outputDir + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_MSE_vs_Doppler_2path.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_MSE_vs_Doppler_2path.csv";
 		ofs.open(fileName);
 
 		sim.setNoiseSD(fixedEbN0dB);
@@ -267,7 +290,7 @@ int main()
 		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
 		std::cin >> fixedEbN0dB;
 
-		fileName = outputDir + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_MSE_vs_Doppler_2path_only_pilot.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_MSE_vs_Doppler_2path_only_pilot.csv";
 		ofs.open(fileName);
 
 		sim.setNoiseSD(fixedEbN0dB);
@@ -291,7 +314,7 @@ int main()
 		std::cin >> dopplerFrequency;
 
 		// ファイル名の設定: 固定の f_d*T_s に基づくファイル名
-		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_Channel_Magnitude_Response.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_Channel_Magnitude_Response.csv";
 		ofs.open(fileName);
 
 		sim.setDopplerFrequency(dopplerFrequency); // 周波数応答生成のために設定
@@ -310,7 +333,7 @@ int main()
 		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
 		std::cin >> fixedEbN0dB;
 
-		fileName = outputDir + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_NoiseVar_MSE_vs_Doppler_2path.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_NoiseVar_MSE_vs_Doppler_2path.csv";
 		ofs.open(fileName);
 
 		// シミュレータにノイズSDを設定（データ生成用）
@@ -338,7 +361,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_MSE_vs_EbN0_pilot_h_est_MODE12.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_MSE_vs_EbN0_pilot_h_est_MODE12.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
@@ -359,7 +382,7 @@ int main()
 		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
-		fileName = outputDir + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_MSE_vs_EbN0_pilot_H_est_MODE13.csv";
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_MSE_vs_EbN0_pilot_H_est_MODE13.csv";
 		ofs.open(fileName);
 
 		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {

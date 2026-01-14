@@ -12,11 +12,10 @@
 class Transceiver
 {
 public:
-    Transceiver(const SimulationParameters &params) : params_(params)
+    Transceiver(const SimulationParameters &params, const Eigen::MatrixXcd &W) : params_(params), W_est_(W)
     {
         EstimatorParameters est_params_;
         // リサイズ
-        W_est_.resize(params_.K_, est_params_.Q_est);
         H_true_.resize(params_.L_, params_.K_);
         H_est_.resize(params_.L_, params_.K_);
         txData_.resize(params_.L_, params_.K_);
@@ -29,7 +28,7 @@ public:
         xPro.resize(params_.NUMBER_OF_SYMBOLS);
         X_bar.setZero(params_.K_, params_.K_);
         R_moment.setZero(params_.K_, params_.K_);
-        h_l.resize(est_params_.Q_est);
+        h_l.resize(params_.Q_);
         grayNum_.resize(params_.NUMBER_OF_SYMBOLS);
 
         noiseVariance_ = 0.0;
@@ -41,7 +40,7 @@ public:
         setGrayNum();
         // シンボル設計とDFT行列設定
         setSymbol();
-        setW_est_();
+        //setW_est_();
     }
 
     /**
@@ -147,6 +146,7 @@ public:
     void est_H_by_initial_h(){
         set_initial_params_by_pilot();
         H_est_.row(0) = (W_est_ * h_l).transpose();
+        // std::cout << "OK6" << std::endl;
     }
 
     // パイロットシンボルから直接Hを推定する
@@ -157,10 +157,10 @@ public:
 
 private:
     const SimulationParameters &params_;
+    const Eigen::MatrixXcd &W_est_;
     EstimatorParameters est_params_;
     std::vector<int> grayNum_;
 
-    Eigen::MatrixXcd W_est_;
     Eigen::MatrixXi txData_;
     Eigen::MatrixXi rxData_;
     Eigen::VectorXcd symbol_;
@@ -177,22 +177,23 @@ private:
     double noiseVariance_;
     uniform_int_distribution<> unitIntUniformRand_;
     cnormal_distribution<> unitCNormalRand_;
+    std::vector<int> activePathIndices_;
 
-    // DFT行列Wの生成:式(17)
-    void setW_est_()
-    {
-        for (int q = 0; q < est_params_.Q_est; ++q)
-        {
-            for (int k = 0; k < params_.K_ / 2; ++k)
-            {
-                // -26から-1番目のキャリヤ
-                W_est_(k, q) = std::polar(1.0, -2.0 * M_PI * ((double)k - (double)params_.K_ / 2.0) * (double)q / (double)params_.NUMBER_OF_FFT);
-                // 1から26番目のキャリヤ
-                W_est_(k + params_.K_ / 2, q) = std::polar(1.0, -2.0 * M_PI * ((double)k + 1.0) * (double)q / (double)params_.NUMBER_OF_FFT);
-            }
-        }
-        // std::cout << "W_=" << W_ << std::endl;
-    }
+    // // DFT行列Wの生成:式(17)
+    // void setW_est_()
+    // {
+    //     for (int q = 0; q < est_params_.Q_est; ++q)
+    //     {
+    //         for (int k = 0; k < params_.K_ / 2; ++k)
+    //         {
+    //             // -26から-1番目のキャリヤ
+    //             W_est_(k, q) = std::polar(1.0, -2.0 * M_PI * ((double)k - (double)params_.K_ / 2.0) * (double)q / (double)params_.NUMBER_OF_FFT);
+    //             // 1から26番目のキャリヤ
+    //             W_est_(k + params_.K_ / 2, q) = std::polar(1.0, -2.0 * M_PI * ((double)k + 1.0) * (double)q / (double)params_.NUMBER_OF_FFT);
+    //         }
+    //     }
+    //     // std::cout << "W_=" << W_ << std::endl;
+    // }
 
     /**
      * シンボル生成
@@ -238,7 +239,66 @@ private:
     {
         X_l = X_.row(0).asDiagonal();
         h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
-        noiseVariance_ = (Y_.row(0).transpose() - X_l * W_est_ * h_l).squaredNorm() / (double)params_.K_;
+
+        // 電力(norm)とインデックスのペアを作成
+        std::vector<std::pair<double, int>> pathRank;
+        for (int q = 0; q < params_.Q_; ++q) {
+            pathRank.push_back({ std::norm(h_l(q)), q }); // 電力と元のインデックス
+        }
+
+        // 電力が大きい順にソート
+        std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+
+        // for (const auto& p : pathRank) {
+        //     // p.first が電力、p.second が元のインデックス
+        //     std::cout << "Power: " << p.first << ", Index: " << p.second << std::endl;
+        // }
+
+        std::vector<double> aic_list(params_.Q_);
+        std::vector<Eigen::VectorXcd> h_tilde_list(params_.Q_); // 各パスモデルにおける推定値
+        std::vector<double> beta_list(params_.Q_);             // 各パスモデルにおける雑音精度
+
+        for (int Q_tilde = 1; Q_tilde <= params_.Q_; ++Q_tilde) {
+            Eigen::MatrixXcd W_tilde(params_.K_, Q_tilde);
+            for (int i = 0; i < Q_tilde; ++i) {
+                int original_idx = pathRank[i].second; // ソート済みの上位インデックスを取得
+                W_tilde.col(i) = W_est_.col(original_idx); // 対応するDFT行列の列をコピー
+            }
+
+            // 各パスモデルにおける推定値を計算
+            h_tilde_list[Q_tilde - 1] = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
+            // std::cout << "h_l >> " << h_tilde_list[Q_tilde - 1] << std::endl;
+            double residual = (Y_.row(0).transpose() - X_l * W_tilde * h_tilde_list[Q_tilde - 1]).squaredNorm();
+            beta_list[Q_tilde - 1] = (double)params_.K_ / residual;
+
+            // AIC の計算
+            double logL = params_.K_ * std::log(beta_list[Q_tilde - 1]) - params_.K_ * std::log(M_PI) - params_.K_;
+            aic_list[Q_tilde - 1] = -2.0 * (logL - 2.0 * Q_tilde);
+            // std::cout << "aic >> " << aic_list[Q_tilde - 1] << std::endl;
+        }
+
+        // std::cout << "OK3" << std::endl;
+
+        // AIC が最小となるインデックスを特定
+        int best_idx = std::distance(aic_list.begin(), std::min_element(aic_list.begin(), aic_list.end()));
+
+        // std::cout << "OK4" << std::endl;
+        // 確定した推定結果をクラスのメンバ変数へ格納
+        int best_q_idx = std::distance(aic_list.begin(), std::max_element(aic_list.begin(), aic_list.end()));
+        int best_Q_tilde = best_q_idx + 1;
+
+        // 5. 選択されたパスの情報を整理 (0埋め処理)
+        Eigen::VectorXcd h_full = Eigen::VectorXcd::Zero(params_.Q_);
+        activePathIndices_.clear();
+        
+        for (int i = 0; i < best_Q_tilde; ++i) {
+            int original_idx = pathRank[i].second;
+            activePathIndices_.push_back(original_idx); // 採用したインデックスを保存
+            h_full(original_idx) = h_tilde_list[best_q_idx](i); // 推定値を元の位置へ配置
+        }
+        this->h_l = h_full;
+        this->noiseVariance_ = 1.0 / beta_list[best_idx];
+        // std::cout << h_l << std::endl;
     }
 
     void equalizeChannelWithPilot()
