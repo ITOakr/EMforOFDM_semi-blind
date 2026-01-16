@@ -258,12 +258,16 @@ private:
         std::vector<Eigen::VectorXcd> h_tilde_list(params_.Q_); // 各パスモデルにおける推定値
         std::vector<double> beta_list(params_.Q_);             // 各パスモデルにおける雑音精度
 
+        // std::cout << "W_est_ >> " << W_est_.transpose() << std::endl;
+
         for (int Q_tilde = 1; Q_tilde <= params_.Q_; ++Q_tilde) {
             Eigen::MatrixXcd W_tilde(params_.K_, Q_tilde);
             for (int i = 0; i < Q_tilde; ++i) {
                 int original_idx = pathRank[i].second; // ソート済みの上位インデックスを取得
                 W_tilde.col(i) = W_est_.col(original_idx); // 対応するDFT行列の列をコピー
             }
+
+            // std::cout << "W_tilde >> " << W_tilde << std::endl;
 
             // 各パスモデルにおける推定値を計算
             h_tilde_list[Q_tilde - 1] = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
@@ -284,7 +288,7 @@ private:
 
         // std::cout << "OK4" << std::endl;
         // 確定した推定結果をクラスのメンバ変数へ格納
-        int best_q_idx = std::distance(aic_list.begin(), std::max_element(aic_list.begin(), aic_list.end()));
+        int best_q_idx = std::distance(aic_list.begin(), std::min_element(aic_list.begin(), aic_list.end()));
         int best_Q_tilde = best_q_idx + 1;
 
         // 5. 選択されたパスの情報を整理 (0埋め処理)

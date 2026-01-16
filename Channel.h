@@ -91,8 +91,6 @@ private:
                     xi_(q) = xi_(q) / totalPower;
                 }
         }
-
-        
     }
 
     /**
