@@ -261,7 +261,7 @@ private:
 
         for (int Q_tilde = 1; Q_tilde <= params_.Q_; ++Q_tilde) {
 
-            //　インデックスのソート
+            // インデックスのソート
             std::vector<int> selected_indices;
             for (int i = 0; i < Q_tilde; ++i) {
                 selected_indices.push_back(pathRank[i].second);
