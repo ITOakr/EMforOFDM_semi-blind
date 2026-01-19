@@ -255,24 +255,32 @@ private:
         // }
 
         std::vector<double> aic_list(params_.Q_);
-        std::vector<Eigen::VectorXcd> h_tilde_list(params_.Q_); // 各パスモデルにおける推定値
         std::vector<double> beta_list(params_.Q_);             // 各パスモデルにおける雑音精度
 
         // std::cout << "W_est_ >> " << W_est_.transpose() << std::endl;
 
         for (int Q_tilde = 1; Q_tilde <= params_.Q_; ++Q_tilde) {
+
+            //　インデックスのソート
+            std::vector<int> selected_indices;
+            for (int i = 0; i < Q_tilde; ++i) {
+                selected_indices.push_back(pathRank[i].second);
+            }
+            std::sort(selected_indices.begin(), selected_indices.end());
+
+            // W_tilde の生成
             Eigen::MatrixXcd W_tilde(params_.K_, Q_tilde);
             for (int i = 0; i < Q_tilde; ++i) {
-                int original_idx = pathRank[i].second; // ソート済みの上位インデックスを取得
+                int original_idx = selected_indices[i]; // ソート済みの上位インデックスを取得
                 W_tilde.col(i) = W_est_.col(original_idx); // 対応するDFT行列の列をコピー
             }
 
             // std::cout << "W_tilde >> " << W_tilde << std::endl;
 
             // 各パスモデルにおける推定値を計算
-            h_tilde_list[Q_tilde - 1] = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
+            Eigen::VectorXcd h_active = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
             // std::cout << "h_l >> " << h_tilde_list[Q_tilde - 1] << std::endl;
-            double residual = (Y_.row(0).transpose() - X_l * W_tilde * h_tilde_list[Q_tilde - 1]).squaredNorm();
+            double residual = (Y_.row(0).transpose() - X_l * W_tilde * h_active).squaredNorm();
             beta_list[Q_tilde - 1] = (double)params_.K_ / residual;
 
             // AIC の計算
@@ -283,26 +291,34 @@ private:
 
         // std::cout << "OK3" << std::endl;
 
+        // 最良モデルの計算フェーズ
         // AIC が最小となるインデックスを特定
         int best_idx = std::distance(aic_list.begin(), std::min_element(aic_list.begin(), aic_list.end()));
+        int best_Q_tilde = best_idx + 1;
 
-        // std::cout << "OK4" << std::endl;
-        // 確定した推定結果をクラスのメンバ変数へ格納
-        int best_q_idx = std::distance(aic_list.begin(), std::min_element(aic_list.begin(), aic_list.end()));
-        int best_Q_tilde = best_q_idx + 1;
-
-        // 5. 選択されたパスの情報を整理 (0埋め処理)
-        Eigen::VectorXcd h_full = Eigen::VectorXcd::Zero(params_.Q_);
-        activePathIndices_.clear();
-        
+        std::vector<int> final_indices;
         for (int i = 0; i < best_Q_tilde; ++i) {
-            int original_idx = pathRank[i].second;
-            activePathIndices_.push_back(original_idx); // 採用したインデックスを保存
-            h_full(original_idx) = h_tilde_list[best_q_idx](i); // 推定値を元の位置へ配置
+            final_indices.push_back(pathRank[i].second);
         }
-        this->h_l = h_full;
+        std::sort(final_indices.begin(), final_indices.end());
+
+        Eigen::MatrixXcd W_final(params_.K_, best_Q_tilde);
+        for (int i = 0; i < best_Q_tilde; ++i) {
+            W_final.col(i) = W_est_.col(final_indices[i]);
+        }
+
+        Eigen::VectorXcd h_final_active = (W_final.adjoint() * X_l.adjoint() * X_l * W_final).inverse() * W_final.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
+        // std::cout << "h_final_active >> " << h_final_active << std::endl;
+
+        // フルサイズ配列への展開（非採用パスは0埋め）
+        this->h_l = Eigen::VectorXcd::Zero(params_.Q_);
+        for (int i = 0; i < best_Q_tilde; ++i) {
+            this->h_l(final_indices[i]) = h_final_active(i);
+        }
+
+        // 6. パラメータ更新
         this->noiseVariance_ = 1.0 / beta_list[best_idx];
-        // std::cout << h_l << std::endl;
+        // std::cout << "h_l >> " << h_l << std::endl;
     }
 
     void equalizeChannelWithPilot()
