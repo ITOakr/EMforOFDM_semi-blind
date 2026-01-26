@@ -14,6 +14,8 @@
 #include "transceiver.h"
 #include <fstream>    // std::ofstream のために追加
 #include <complex>    // std::abs(std::complex) のために追加
+#include <omp.h>      // OpenMP のために追加
+#include <atomic> // 追加: 進捗カウント用
 
 class Simulator
 {
@@ -104,9 +106,76 @@ public:
             transceiver_.setX_();
             channel_.generateFrequencyResponse(fd_Ts_);
             transceiver_.setY_(channel_.getH(), noiseSD_);
-            transceiver_.equalizeAndDemodulate(); // この中でH_estが計算・保存される
+            transceiver_.equalizeWithWrapperAIC(); // この中でH_estが計算・保存される(equalizeAndDemodulate())
             totalSquaredError += transceiver_.getMSE();
         }
+        // 試行回数、データシンボル数、サブキャリア数で平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+    }
+
+    /**
+     * チャネル推定のMSEを計算するシミュレーション (並列化対応版)
+     * @return MSEのシミュレーション値
+     */
+    double getMSE_simulation_parallel()
+    {
+        double totalSquaredError = 0.0;
+        
+        // ★進捗カウント用の変数を定義（並列ブロックの外で作る）
+        // std::atomic を使うことで、複数のスレッドから同時に +1 されても正しくカウントされます
+        std::atomic<int> completed_trials(0);
+
+        // OpenMPによる並列化
+        // reduction(+:totalSquaredError) で各スレッドの結果を合計する
+        #pragma omp parallel reduction(+:totalSquaredError)
+        {
+            // --- スレッドローカルな変数の準備 ---
+            
+            // 1. パラメータをコピーし、乱数シードをスレッドID分ずらす
+            SimulationParameters local_params = params_;
+            local_params.seed += omp_get_thread_num(); 
+
+            // 2. このスレッド専用の Channel と Transceiver を作成
+            // (メンバ変数の channel_, transceiver_ は使わず、ここ専用のものを使う)
+            // W_master_ は読み取り専用なので共有のものを渡してOK
+            Channel local_channel(local_params, W_master_);
+            Transceiver local_transceiver(local_params, W_master_);
+
+            // --- ループ処理 ---
+            #pragma omp for schedule(dynamic)
+            for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+            {
+                local_transceiver.setX_();
+                local_channel.generateFrequencyResponse(fd_Ts_);
+                
+                // noiseSD_ は共有変数だが読み取り専用なのでそのままでOK
+                local_transceiver.setY_(local_channel.getH(), noiseSD_);
+                
+                // Wrapper法の実行
+                local_transceiver.equalizeWithWrapperAIC(); 
+                
+                // MSEの蓄積
+                totalSquaredError += local_transceiver.getMSE();
+
+                // 1. 完了数を +1 する (スレッドセーフ)
+                int current_count = ++completed_trials;
+
+                // 2. 一定間隔（例: 10%ごと）でのみ表示処理を行う
+                // 頻繁に cout すると逆に遅くなるため、間引きが必要です
+                if (NUMBER_OF_TRIAL >= 10 && (current_count % (NUMBER_OF_TRIAL / 10) == 0)) 
+                {
+                    // 3. 表示中は他のスレッドを待たせる（文字化け防止）
+                    #pragma omp critical
+                    {
+                        // \r で行頭に戻って上書き表示する
+                        double progress = (double)current_count / NUMBER_OF_TRIAL * 100.0;
+                        std::cout << "\rProgress: " << (int)progress << "% (" << current_count << "/" << NUMBER_OF_TRIAL << ")" << std::flush;
+                    }
+                }
+            }
+        } // 並列領域終了
+        std::cout << "\rProgress: 100% (" << NUMBER_OF_TRIAL << "/" << NUMBER_OF_TRIAL << ") Done." << std::endl;
+
         // 試行回数、データシンボル数、サブキャリア数で平均化
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
     }

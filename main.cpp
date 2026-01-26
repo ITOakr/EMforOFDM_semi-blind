@@ -20,7 +20,7 @@ static const int EbN0dBmax = 30;
 static const int EbN0dBstp = 5;
 
 static const int dopplerMin = 0;
-static const double dopplerMax = 0.0102;
+static const double dopplerMax = 0.02;
 static const double dopplerStep = 0.0002;
 
 // ファイル
@@ -98,6 +98,7 @@ int main()
 	std::cout << "11: Noise Variance MSE Doppler sweep (fixed Eb/N0)" << std::endl;
 	std::cout << "12: H MSE by initial h_est Doppler sweep (fixed Eb/N0)" << std::endl;
 	std::cout << "13: H MSE by initial H_est Doppler sweep (fixed Eb/N0)" << std::endl;
+	std::cout << "14: MSE vs Doppler sweep (parallel) (fixed Eb/N0)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -273,7 +274,7 @@ int main()
 		sim.setNoiseSD(fixedEbN0dB);
 		double mse;
 
-		for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; dopplerFrequency += dopplerStep) {
+		for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
 			sim.setDopplerFrequency(dopplerFrequency);
 
 			mse = sim.getMSE_simulation();
@@ -281,6 +282,15 @@ int main()
 			std::cout << "-----------" << std::endl;
 			std::cout << "f_dT_s = " << dopplerFrequency << ", MSE = " << mse << std::endl;
 			ofs << dopplerFrequency << "," << mse << std::endl;
+
+			// --- ここで次回の値を決定 ---
+            if (dopplerFrequency == 0.0) {
+                // 現在が0なら、次は最小ステップ幅(0.0002)にする
+                dopplerFrequency = dopplerStep;
+            } else {
+                // それ以外なら2倍にする (0.0002 -> 0.0004 -> 0.0008...)
+                dopplerFrequency *= 2.0;
+            }
 		}
 	}
 	else if (mode_select == 9)
@@ -394,6 +404,38 @@ int main()
 			std::cout << "-----------" << std::endl;
 			std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse << std::endl;
 			ofs << EbN0dB << "," << mse << std::endl;
+		}
+	}
+	else if (mode_select == 14)
+	{
+		// --- モード8: MSE vs ドップラー周波数スイープ ---
+		int fixedEbN0dB;
+		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+		std::cin >> fixedEbN0dB;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_MSE_vs_Doppler_2path_parallel.csv";
+		ofs.open(fileName);
+
+		sim.setNoiseSD(fixedEbN0dB);
+		double mse;
+
+		for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+			sim.setDopplerFrequency(dopplerFrequency);
+
+			mse = sim.getMSE_simulation_parallel();
+
+			std::cout << "-----------" << std::endl;
+			std::cout << "f_dT_s = " << dopplerFrequency << ", MSE = " << mse << std::endl;
+			ofs << dopplerFrequency << "," << mse << std::endl;
+
+			// --- ここで次回の値を決定 ---
+            if (dopplerFrequency == 0.0) {
+                // 現在が0なら、次は最小ステップ幅(0.0002)にする
+                dopplerFrequency = dopplerStep;
+            } else {
+                // それ以外なら2倍にする (0.0002 -> 0.0004 -> 0.0008...)
+                dopplerFrequency *= 2.0;
+            }
 		}
 	}
 	else

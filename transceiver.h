@@ -154,6 +154,120 @@ public:
         H_est_.row(0) = (X_.row(0).asDiagonal()).inverse() * Y_.row(0).transpose();
     }
 
+    public:
+    // Wrapper法によるAICモデル選択付き等化
+    double equalizeWithWrapperAIC()
+    {
+        // 初期化: パイロットから初期推定
+        set_initial_params_by_pilot();
+        H_est_.row(0) = (W_est_ * h_l).transpose();
+
+        double total_iterations_sum = 0.0;
+        int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
+
+        // データシンボルごとのループ
+        for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
+        {
+            // ---------------------------------------------------------
+            // Step 1: フルモデル (全パス) でEMを収束させる
+            // ---------------------------------------------------------
+            activePathIndices_.clear();
+            for(int q=0; q<params_.Q_; ++q) activePathIndices_.push_back(q);
+
+            // 初期値をセット (前のシンボル or パイロットの推定値を維持してスタート)
+            // ここでは h_l は前回の結果が残っているのでそのまま使う(Warm Start)
+            
+            runEMLoop(l); // フルモデルで収束
+
+            // フルモデルの結果を保存
+            Eigen::VectorXcd h_full = h_l;
+            double noise_full = noiseVariance_;
+
+            // ---------------------------------------------------------
+            // Step 2: パスの電力ランキング作成
+            // ---------------------------------------------------------
+            std::vector<std::pair<double, int>> pathRank;
+            for (int q = 0; q < params_.Q_; ++q) {
+                pathRank.push_back({ std::norm(h_full(q)), q });
+            }
+            // 降順ソート
+            std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+
+            // ---------------------------------------------------------
+            // Step 3: 候補モデルごとのWrapper評価
+            // ---------------------------------------------------------
+            double min_aic = 1e18; // 十分大きな値
+            Eigen::VectorXcd best_h_l = h_full;
+            double best_noise = noise_full;
+            int best_iter_count = 0;
+
+            // 上位 q 個のパスを使うモデルを順次評価
+            for (int q = 1; q <= params_.Q_; ++q) {
+
+                // アクティブパスの設定
+                activePathIndices_.clear();
+                for(int i=0; i<q; ++i) activePathIndices_.push_back(pathRank[i].second);
+                std::sort(activePathIndices_.begin(), activePathIndices_.end()); // インデックス順に整理
+
+                // パラメータのリセット (フルモデルの結果から射影してスタートするのが効率的)
+                h_l.setZero();
+                for(int idx : activePathIndices_) h_l(idx) = h_full(idx);
+                noiseVariance_ = noise_full;
+
+                // このモデルでEMを回す
+                int iter = runEMLoop(l);
+
+                // AICの計算
+                double beta = 1.0 / noiseVariance_;
+                Eigen::VectorXcd Y_vec = Y_.row(l).transpose(); // 受信信号 Y
+                Eigen::VectorXcd H_est = W_est_ * h_l;          // 推定チャネル H = W * h
+                Eigen::VectorXcd XH = X_bar * H_est;            // X_bar * H
+
+                // 各項をスカラ(double)として計算
+                // 第1項: ||Y||^2
+                double term1 = Y_vec.squaredNorm();
+
+                // 第2項 & 第3項: - Y^H * X_bar * H - (X_bar * H)^H * Y
+                // これは「-2 * Re( Y^H * (X_bar * H) )」と同じです
+                double term2 = (Y_vec.adjoint() * XH).value().real();
+                double term3 = (XH.adjoint() * Y_vec).value().real();
+
+                // 第4項: H^H * R * H
+                // (H^H * R * H) はエルミート形式なので必ず実数になります
+                double term4 = (H_est.adjoint() * R_moment * H_est).value().real();         // H^H * (R * H)
+                // 対数尤度の簡易計算 (定数項は比較において無視可能だが、ここでは元のコードに合わせる)
+                double logL = params_.K_ * std::log(beta) - beta * (term1 - term2 - term3 + term4);
+                // double logL = params_.K_ * std::log(beta) - params_.K_ * std::log(M_PI) - params_.K_;
+                double aic = -2.0 * (logL - 2.0 * q); // k はパラメータ数 (複素数なので自由度 2k)
+
+                // 最良モデルの更新
+                if (aic < min_aic) {
+                    min_aic = aic;
+                    best_h_l = h_l;
+                    best_noise = noiseVariance_;
+                    best_iter_count = iter; // 便宜上、最良モデルの反復数を記録
+                }
+            }
+
+            // ---------------------------------------------------------
+            // Step 4: 最良モデルの結果を採用
+            // ---------------------------------------------------------
+            h_l = best_h_l;
+            noiseVariance_ = best_noise;
+            total_iterations_sum += best_iter_count;
+
+            // 結果の格納
+            H_est_.row(l) = (W_est_ * h_l).transpose();
+            for (int k = 0; k < params_.K_; k++)
+            {
+                // 等化後の信号
+                R_(l, k) = Y_(l, k) / (W_est_.row(k) * h_l)(0);
+            }
+        }
+
+        return total_iterations_sum / static_cast<double>(dataSymbolCount);
+    }
+
 
 private:
     const SimulationParameters &params_;
@@ -408,6 +522,57 @@ private:
         return iter_counts.mean();
     }
 
+    // 指定されたパス(activePathIndices_)でEMアルゴリズムを回す関数
+    // 戻り値: 収束までの反復回数
+    int runEMLoop(int l, int max_iter = 100) {
+        const int MIN_ITER = 3;
+        Eigen::VectorXi symbol_prev2(params_.K_);
+        Eigen::VectorXi symbol_prev1(params_.K_);
+        Eigen::VectorXi symbol_current(params_.K_);
+        Eigen::VectorXd obj(params_.NUMBER_OF_SYMBOLS);
+        
+        symbol_prev2.setConstant(-1);
+        symbol_prev1.setConstant(-1);
+
+        int current_iter_count = 0;
+
+        for (int iter = 0; iter < max_iter; iter++)
+        {
+            current_iter_count = iter + 1;
+            
+            // Eステップ
+            Estep(l);
+            
+            // Mステップ (activePathIndices_ に基づいて更新)
+            Mstep(l);
+
+            // 硬判定シンボルの更新（収束判定用）
+            for (int k = 0; k < params_.K_; k++)
+            {
+                std::complex<double> H_current_k = (W_est_.row(k) * h_l)(0);
+                std::complex<double> R_current_k = Y_(l, k) / H_current_k;
+
+                for(int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++){
+                    obj(i) = std::norm(R_current_k - symbol_(i));
+                }
+                Eigen::VectorXd::Index minColumn;
+                obj.minCoeff(&minColumn);
+                symbol_current(k) = minColumn;
+            }
+
+            if (iter >= MIN_ITER - 1)
+            {
+                bool converged = (symbol_current == symbol_prev1) && (symbol_prev1 == symbol_prev2);
+                if (converged){
+                    break;
+                }
+            }
+            symbol_prev2 = symbol_prev1;
+            symbol_prev1 = symbol_current;
+        }
+        return current_iter_count;
+    }
+
     void Estep(int l)
     {
         // std::cout << "h_l=" << h_l << std::endl;
@@ -473,12 +638,53 @@ private:
 
     void Mstep(int l)
     {
-        Eigen::MatrixXcd A = X_bar * W_est_;
-        h_l = (W_est_.adjoint() * R_moment * W_est_).inverse() * (X_bar * W_est_).adjoint() * Y_.row(l).transpose();
-        // std::cout << "h_l=" << h_l << std::endl;
-        // std::cout << "A=" << A << std::endl;
-        noiseVariance_ = ((Y_.row(l).transpose() - X_bar * W_est_ * h_l).squaredNorm() + ((W_est_ * h_l).adjoint() * (R_moment - X_bar.adjoint() * X_bar) * W_est_ * h_l).value().real()) / (double)params_.K_;
+        // アクティブなパスの数
+        int n_active = activePathIndices_.size();
+        if (n_active == 0) return; // 安全策
+
+        // 1. アクティブなパスに対応する W の部分行列を作成
+        Eigen::MatrixXcd W_active(params_.K_, n_active);
+        for(int i = 0; i < n_active; ++i) {
+            W_active.col(i) = W_est_.col(activePathIndices_[i]);
+        }
+
+        // 2. 縮小モデルでの h (サイズ: n_active x 1) の推定
+        // h_active = (W_active^H * R_moment * W_active)^-1 * (X_bar * W_active)^H * Y
+        Eigen::MatrixXcd A = X_bar * W_active;
+        Eigen::MatrixXcd B = W_active.adjoint() * R_moment * W_active;
+        Eigen::VectorXcd h_active = B.inverse() * A.adjoint() * Y_.row(l).transpose();
+
+        // 3. 全体の h_l (サイズ: Q x 1) にマッピング（非アクティブは0にする）
+        h_l.setZero();
+        for(int i = 0; i < n_active; ++i) {
+            h_l(activePathIndices_[i]) = h_active(i);
+        }
+
+        // 4. 雑音分散の更新
+        // J = ||Y - X_bar * W * h||^2 + h^H * W^H * (R_moment - X_bar^H * X_bar) * W * h
+        Eigen::VectorXcd Wh = W_active * h_active;
+        
+        // 第1項: 残差ノルム
+        double term1 = (Y_.row(l).transpose() - X_bar * Wh).squaredNorm();
+
+        // 第2項: 推定誤差補正
+        Eigen::MatrixXcd Cov_X = R_moment - X_bar.adjoint() * X_bar;
+        double term2 = (Wh.adjoint() * Cov_X * Wh).value().real();
+
+        noiseVariance_ = (term1 + term2) / (double)params_.K_;
+        
+        // 数値安定性のための下限処理
+        if (noiseVariance_ < 1e-10) noiseVariance_ = 1e-10;
     }
+
+    // void Mstep(int l)
+    // {
+    //     Eigen::MatrixXcd A = X_bar * W_est_;
+    //     h_l = (W_est_.adjoint() * R_moment * W_est_).inverse() * (X_bar * W_est_).adjoint() * Y_.row(l).transpose();
+    //     // std::cout << "h_l=" << h_l << std::endl;
+    //     // std::cout << "A=" << A << std::endl;
+    //     noiseVariance_ = ((Y_.row(l).transpose() - X_bar * W_est_ * h_l).squaredNorm() + ((W_est_ * h_l).adjoint() * (R_moment - X_bar.adjoint() * X_bar) * W_est_ * h_l).value().real()) / (double)params_.K_;
+    // }
 
     /**
      * 最尤復調
