@@ -154,7 +154,6 @@ public:
         H_est_.row(0) = (X_.row(0).asDiagonal()).inverse() * Y_.row(0).transpose();
     }
 
-    public:
     // Wrapper法によるAICモデル選択付き等化
     double equalizeWithWrapperAIC()
     {
