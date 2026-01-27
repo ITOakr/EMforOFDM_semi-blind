@@ -367,10 +367,10 @@ public:
      */
     std::pair<double, double> getAIC_Metrics_pilot()
     {
-        long long total_TP = 0; 
-        long long total_FP = 0; 
-        long long total_FN = 0; 
-        long long total_TN = 0; 
+        long long total_TP = 0; // 正解: あるものを「ある」と言えた
+        long long total_FP = 0; // 誤検知: ないものを「ある」と言ってしまった
+        long long total_FN = 0; // 見逃し: あるものを「ない」と言ってしまった
+        long long total_TN = 0; // 正常: ないものを「ない」と言えた
 
         #pragma omp parallel reduction(+:total_TP, total_FP, total_FN, total_TN)
         {
