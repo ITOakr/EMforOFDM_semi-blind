@@ -154,6 +154,24 @@ public:
         H_est_.row(0) = (X_.row(0).asDiagonal()).inverse() * Y_.row(0).transpose();
     }
 
+    /**
+     * AICで選択されたパスモデル（マスク）を取得する
+     * @return サイズQのベクトル (1:パスあり, 0:パスなし)
+     */
+    std::vector<int> getEstimatedPathMask()
+    {
+        std::vector<int> mask(params_.Q_, 0);
+        // h_l は set_initial_params_by_pilot() で非採用パスが0.0に設定されている前提
+        for (int q = 0; q < params_.Q_; ++q)
+        {
+            // 推定されたパスが有効かどうか (非ゼロなら有効)
+            if (std::norm(h_l(q)) > 1e-20) {
+                mask[q] = 1;
+            }
+        }
+        return mask;
+    }
+
     // Wrapper法によるAICモデル選択付き等化
     double equalizeWithWrapperAIC()
     {
@@ -267,6 +285,29 @@ public:
         return total_iterations_sum / static_cast<double>(dataSymbolCount);
     }
 
+    /**
+     * AICで選択されたパスモデルが真のモデルと一致しているか判定する
+     * @param trueMask 真のパス有無マスク (1:あり, 0:なし)
+     * @return true: 完全一致, false: 不一致
+     */
+    bool checkAICAccuracy(const std::vector<int>& trueMask)
+    {
+        // h_l は set_initial_params_by_pilot() で非採用パスが0.0に設定されている前提
+        for (int q = 0; q < params_.Q_; ++q)
+        {
+            // 推定されたパスが有効かどうか (非ゼロなら有効)
+            bool isSelected = (std::norm(h_l(q)) > 1e-20); 
+
+            // 真のパスが有効かどうか
+            bool isTrue = (trueMask[q] != 0);
+
+            // 不一致があれば false
+            if (isSelected != isTrue) {
+                return false;
+            }
+        }
+        return true;
+    }
 
 private:
     const SimulationParameters &params_;

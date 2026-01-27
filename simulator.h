@@ -324,6 +324,101 @@ public:
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
     }
 
+    /**
+     * AICによるモデル選択の正答率を計算するシミュレーション
+     * @return 正答率 (0.0 ~ 1.0)
+     */
+    double getAICAccuracy_pilot()
+    {
+        int successCount = 0;
+        
+        // 並列化する場合 (高速化のため推奨)
+        // std::atomic<int> completed_trials(0); // 進捗表示用
+        #pragma omp parallel reduction(+:successCount)
+        {
+            SimulationParameters local_params = params_;
+            local_params.seed += omp_get_thread_num(); 
+            Channel local_channel(local_params, W_master_);
+            Transceiver local_transceiver(local_params, W_master_);
+
+            #pragma omp for
+            for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+            {
+                local_transceiver.setX_();
+                local_channel.generateFrequencyResponse(fd_Ts_);
+                local_transceiver.setY_(local_channel.getH(), noiseSD_);
+
+                // パイロットのみでAIC推定を実行 (set_initial_params_by_pilotが内部で呼ばれる)
+                local_transceiver.est_H_by_initial_h(); 
+
+                // 正解判定 (pathMaskと比較)
+                if (local_transceiver.checkAICAccuracy(local_params.pathMask)) {
+                    successCount++;
+                }
+            }
+        }
+
+        return (double)successCount / (double)NUMBER_OF_TRIAL;
+    }
+
+    /**
+     * AICの評価指標（F値と正答率）を計算する
+     * @return pair<F-measure, Accuracy>
+     */
+    std::pair<double, double> getAIC_Metrics_pilot()
+    {
+        long long total_TP = 0; 
+        long long total_FP = 0; 
+        long long total_FN = 0; 
+        long long total_TN = 0; 
+
+        #pragma omp parallel reduction(+:total_TP, total_FP, total_FN, total_TN)
+        {
+            SimulationParameters local_params = params_;
+            local_params.seed += omp_get_thread_num(); 
+            Channel local_channel(local_params, W_master_);
+            Transceiver local_transceiver(local_params, W_master_);
+
+            #pragma omp for
+            for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+            {
+                local_transceiver.setX_();
+                local_channel.generateFrequencyResponse(fd_Ts_);
+                local_transceiver.setY_(local_channel.getH(), noiseSD_);
+
+                local_transceiver.est_H_by_initial_h(); 
+                std::vector<int> estMask = local_transceiver.getEstimatedPathMask();
+                
+                for(int q=0; q<local_params.Q_; ++q) {
+                    bool isTrue = (local_params.pathMask[q] == 1);
+                    bool isEst  = (estMask[q] == 1);
+
+                    if (isTrue && isEst)       total_TP++;
+                    else if (!isTrue && isEst) total_FP++;
+                    else if (isTrue && !isEst) total_FN++;
+                    else                       total_TN++;
+                }
+            }
+        }
+
+        // --- F値の計算 ---
+        long long denominator_prec = total_TP + total_FP;
+        double precision = (denominator_prec > 0) ? (double)total_TP / denominator_prec : 0.0;
+
+        long long denominator_rec = total_TP + total_FN;
+        double recall = (denominator_rec > 0) ? (double)total_TP / denominator_rec : 0.0;
+
+        double numerator_f = 2.0 * precision * recall;
+        double denominator_f = precision + recall;
+        double f_measure = (denominator_f > 0) ? numerator_f / denominator_f : 0.0;
+
+        // --- 正答率の計算 ---
+        long long total = total_TP + total_FP + total_FN + total_TN;
+        double accuracy = (total > 0) ? (double)(total_TP + total_TN) / total : 0.0;
+
+        return {f_measure, accuracy};
+    }
+
 private:
     SimulationParameters params_;
     Eigen::MatrixXcd W_master_;

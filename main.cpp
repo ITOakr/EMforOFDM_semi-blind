@@ -99,6 +99,9 @@ int main()
 	std::cout << "12: H MSE by initial h_est Doppler sweep (fixed Eb/N0)" << std::endl;
 	std::cout << "13: H MSE by initial H_est Doppler sweep (fixed Eb/N0)" << std::endl;
 	std::cout << "14: MSE vs Doppler sweep (parallel) (fixed Eb/N0)" << std::endl;
+	std::cout << "15: AIC Model Selection Accuracy vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "16: AIC Path Selection Accuracy vs Doppler (fixed Eb/N0)" << std::endl;
+    std::cout << "17: AIC F-Measure vs Doppler (fixed Eb/N0)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -438,6 +441,98 @@ int main()
             }
 		}
 	}
+	else if (mode_select == 15)
+    {
+        // --- モード15: AICモデル選択正答率 vs ドップラー周波数 ---
+        int fixedEbN0dB;
+        std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+        std::cin >> fixedEbN0dB;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_AIC_Model_Accuracy_vs_Doppler.csv";
+        ofs.open(fileName);
+
+        sim.setNoiseSD(fixedEbN0dB);
+        double accuracy;
+
+        for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+            sim.setDopplerFrequency(dopplerFrequency);
+
+            accuracy = sim.getAICAccuracy_pilot();
+            
+            std::cout << "-----------" << std::endl;
+            std::cout << "f_dT_s = " << dopplerFrequency << ", Accuracy = " << accuracy << std::endl;
+            ofs << dopplerFrequency << "," << accuracy << std::endl;
+
+             // ドップラー周波数の更新 (0 -> step -> 2*step ...)
+            if (dopplerFrequency == 0.0) {
+                dopplerFrequency = dopplerStep;
+            } else {
+                dopplerFrequency *= 2.0;
+            }
+        }
+    }
+	else if (mode_select == 16)
+    {
+        // --- モード16: 正答率 (Accuracy) のみ出力 ---
+        int fixedEbN0dB;
+        std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+        std::cin >> fixedEbN0dB;
+
+        // ファイル名に Accuracy を明記
+        fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_AIC_Path_Accuracy.csv";
+        ofs.open(fileName);
+        
+        ofs << "f_dT_s,Accuracy" << std::endl;
+
+        sim.setNoiseSD(fixedEbN0dB);
+
+        for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+            sim.setDopplerFrequency(dopplerFrequency);
+
+            // 計算実行 (両方計算されるが、Accuracyだけ使う)
+            std::pair<double, double> result = sim.getAIC_Metrics_pilot();
+            double accuracy = result.second;
+            
+            std::cout << "-----------" << std::endl;
+            std::cout << "f_dT_s = " << dopplerFrequency << ", Accuracy = " << accuracy << std::endl;
+            
+            ofs << dopplerFrequency << "," << accuracy << std::endl;
+
+            if (dopplerFrequency == 0.0) dopplerFrequency = dopplerStep;
+            else dopplerFrequency *= 2.0;
+        }
+    }
+    else if (mode_select == 17)
+    {
+        // --- モード17: F値 (F-Measure) のみ出力 ---
+        int fixedEbN0dB;
+        std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+        std::cin >> fixedEbN0dB;
+
+        // ファイル名に F_Measure を明記
+        fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_AIC_F_Measure.csv";
+        ofs.open(fileName);
+        
+        ofs << "f_dT_s,F_Measure" << std::endl;
+
+        sim.setNoiseSD(fixedEbN0dB);
+
+        for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+            sim.setDopplerFrequency(dopplerFrequency);
+
+            // 計算実行 (両方計算されるが、F-Measureだけ使う)
+            std::pair<double, double> result = sim.getAIC_Metrics_pilot();
+            double f_measure = result.first;
+            
+            std::cout << "-----------" << std::endl;
+            std::cout << "f_dT_s = " << dopplerFrequency << ", F-Measure = " << f_measure << std::endl;
+            
+            ofs << dopplerFrequency << "," << f_measure << std::endl;
+
+            if (dopplerFrequency == 0.0) dopplerFrequency = dopplerStep;
+            else dopplerFrequency *= 2.0;
+        }
+    }
 	else
 	{
 		std::cout << "Invalid mode selected." << std::endl;
