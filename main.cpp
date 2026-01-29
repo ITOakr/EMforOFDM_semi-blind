@@ -11,6 +11,7 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
+#include <chrono>
 #include "simulator.h"
 #include "parameters.h"
 
@@ -102,6 +103,7 @@ int main()
 	std::cout << "15: AIC Model Selection Accuracy vs Doppler (fixed Eb/N0)" << std::endl;
 	std::cout << "16: AIC Path Selection Accuracy vs Doppler (fixed Eb/N0)" << std::endl;
     std::cout << "17: AIC F-Measure vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "18: Embedded AIC Method MSE vs Eb/N0" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -422,6 +424,9 @@ int main()
 		sim.setNoiseSD(fixedEbN0dB);
 		double mse;
 
+		// ★合計時間の計測開始
+        auto start_total = std::chrono::high_resolution_clock::now();
+
 		for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
 			sim.setDopplerFrequency(dopplerFrequency);
 
@@ -440,6 +445,13 @@ int main()
                 dopplerFrequency *= 2.0;
             }
 		}
+		// ★合計時間の計測終了と表示
+        auto end_total = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_total = end_total - start_total;
+        
+        std::cout << "========================================" << std::endl;
+        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+        std::cout << "========================================" << std::endl;
 	}
 	else if (mode_select == 15)
     {
@@ -532,6 +544,47 @@ int main()
             if (dopplerFrequency == 0.0) dopplerFrequency = dopplerStep;
             else dopplerFrequency *= 2.0;
         }
+    }
+	else if (mode_select == 18)
+    {
+        // --- モード18: 埋め込み法 MSE vs Doppler (Eb/N0固定) ---
+        int fixedEbN0dB;
+        std::cout << "Enter fixed Eb/N0 [dB]: ";
+        std::cin >> fixedEbN0dB;
+
+        // ファイル名を変更
+        fileName = outputDir + timeStr + "_" + modulationName + "_EmbeddedAIC_MSE_vs_Doppler_EbN0_" + std::to_string(fixedEbN0dB) + ".csv";
+        ofs.open(fileName);
+
+        sim.setNoiseSD((double)fixedEbN0dB);
+
+		// ★合計時間の計測開始
+        auto start_total = std::chrono::high_resolution_clock::now();
+
+        // ドップラー周波数をスイープ
+        for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+            sim.setDopplerFrequency(dopplerFrequency);
+            
+            // 埋め込み法シミュレーション (MSE)
+            double mse = sim.getMSE_EmbeddedAIC_Simulation();
+
+            std::cout << "f_dT_s = " << dopplerFrequency << ", MSE = " << mse << std::endl;
+            ofs << dopplerFrequency << "," << mse << std::endl;
+
+            // ループ更新
+            if (dopplerFrequency == 0.0) {
+                dopplerFrequency = dopplerStep;
+            } else {
+                dopplerFrequency *= 2.0;
+            }
+        }
+		// ★合計時間の計測終了と表示
+        auto end_total = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_total = end_total - start_total;
+        
+        std::cout << "========================================" << std::endl;
+        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+        std::cout << "========================================" << std::endl;
     }
 	else
 	{

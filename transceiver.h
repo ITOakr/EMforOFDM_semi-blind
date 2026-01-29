@@ -285,6 +285,137 @@ public:
         return total_iterations_sum / static_cast<double>(dataSymbolCount);
     }
 
+    // 埋め込み法（Embedded Method）による等化
+    // EMループのたびにAICでパスを選択し直す
+    double equalizeWithEmbeddedAIC()
+    {
+        // 初期化: パイロットから初期推定
+        set_initial_params_by_pilot();
+        H_est_.row(0) = (W_est_ * h_l).transpose();
+
+        double total_iterations_sum = 0.0;
+        int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
+        const int MAX_ITER = 50; // 埋め込み法は振動しやすいので上限を少し抑えるか、逆に増やすか調整
+        const int MIN_ITER = 3;
+
+        // データシンボルごとのループ
+        for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
+        {
+            // 収束判定用変数
+            Eigen::VectorXi symbol_prev2(params_.K_); symbol_prev2.setConstant(-1);
+            Eigen::VectorXi symbol_prev1(params_.K_); symbol_prev1.setConstant(-1);
+            Eigen::VectorXi symbol_current(params_.K_);
+            Eigen::VectorXd obj(params_.NUMBER_OF_SYMBOLS);
+
+            int current_iter_count = 0;
+
+            // --- EMループ (Embedded) ---
+            for (int iter = 0; iter < MAX_ITER; iter++)
+            {
+                current_iter_count = iter + 1;
+
+                // 1. Eステップ
+                // 現在の h_l を使って X_bar, R_moment を更新
+                Estep(l);
+
+                // 2. Mステップ (Full Model Explore)
+                // ★ここが重要: 現在選択されているパスに関わらず、一度「全16パス」で推定し直す
+                // h_full = (W^H * R * W)^-1 * (X_bar * W)^H * Y
+                Eigen::MatrixXcd G = W_est_.adjoint() * R_moment * W_est_;
+                Eigen::VectorXcd b = W_est_.adjoint() * X_bar.adjoint() * Y_.row(l).transpose();
+                
+                // 正則化 (逆行列が計算できない場合への対策)
+                // G += Eigen::MatrixXcd::Identity(params_.Q_, params_.Q_) * 1e-9; 
+                Eigen::VectorXcd h_full = G.inverse() * b;
+
+                // 3. AICによるモデル選択 (埋め込み)
+                // フルモデルの結果を使ってランキング作成
+                std::vector<std::pair<double, int>> pathRank;
+                for (int q = 0; q < params_.Q_; ++q) {
+                    pathRank.push_back({ std::norm(h_full(q)), q });
+                }
+                std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+
+                double min_aic = 1e18;
+                Eigen::VectorXcd best_h_l = h_full; // デフォルトはフル
+                double best_noise = 0.0;
+
+                // パス数 q=1..Q についてAIC評価
+                for (int q = 1; q <= params_.Q_; ++q) {
+                    // 上位q個のインデックスを取得
+                    std::vector<int> current_indices;
+                    for(int i=0; i<q; ++i) current_indices.push_back(pathRank[i].second);
+                    
+                    // 簡易的な射影: フルモデルから該当成分だけ抜き出す
+                    // (厳密には部分行列で再推定すべきだが、計算量が爆発するため射影で近似)
+                    Eigen::VectorXcd h_sub = Eigen::VectorXcd::Zero(params_.Q_);
+                    for(int idx : current_indices) h_sub(idx) = h_full(idx);
+
+                    // 残差の計算: J = || Y - X_bar * W * h ||^2
+                    // 近似的に X_bar を使う
+                    Eigen::VectorXcd Y_est = X_bar * W_est_ * h_sub;
+                    double residual = (Y_.row(l).transpose() - Y_est).squaredNorm();
+                    
+                    // 分散推定
+                    double beta_est = (double)params_.K_ / residual;
+                    
+                    // AIC計算 (簡易式)
+                    double logL = params_.K_ * std::log(beta_est) - params_.K_ * std::log(M_PI) - params_.K_;
+                    double aic = -2.0 * (logL - 2.0 * q);
+
+                    if (aic < min_aic) {
+                        min_aic = aic;
+                        best_h_l = h_sub;
+                        best_noise = 1.0 / beta_est;
+                    }
+                }
+
+                // 4. パラメータ更新
+                // ベストなモデルを次の反復の h_l とする
+                h_l = best_h_l;
+                noiseVariance_ = best_noise;
+
+                // 5. 収束判定 (シンボル硬判定の変化を見る)
+                for (int k = 0; k < params_.K_; k++)
+                {
+                    std::complex<double> H_current_k = (W_est_.row(k) * h_l)(0);
+                    // ゼロ除算対策
+                    if (std::abs(H_current_k) < 1e-9) H_current_k = 1e-9;
+                    
+                    std::complex<double> R_current_k = Y_(l, k) / H_current_k;
+                    for(int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++){
+                        obj(i) = std::norm(R_current_k - symbol_(i));
+                    }
+                    Eigen::VectorXd::Index minColumn;
+                    obj.minCoeff(&minColumn);
+                    symbol_current(k) = minColumn;
+                }
+
+                if (iter >= MIN_ITER - 1)
+                {
+                    if ((symbol_current == symbol_prev1) && (symbol_prev1 == symbol_prev2)){
+                        break;
+                    }
+                }
+                symbol_prev2 = symbol_prev1;
+                symbol_prev1 = symbol_current;
+            } // EM loop end
+
+            total_iterations_sum += current_iter_count;
+
+            // 結果の格納
+            H_est_.row(l) = (W_est_ * h_l).transpose();
+            for (int k = 0; k < params_.K_; k++)
+            {
+                std::complex<double> val = (W_est_.row(k) * h_l)(0);
+                if(std::abs(val) < 1e-9) val = 1e-9;
+                R_(l, k) = Y_(l, k) / val;
+            }
+        }
+
+        return total_iterations_sum / static_cast<double>(dataSymbolCount);
+    }
+
     /**
      * AICで選択されたパスモデルが真のモデルと一致しているか判定する
      * @param trueMask 真のパス有無マスク (1:あり, 0:なし)

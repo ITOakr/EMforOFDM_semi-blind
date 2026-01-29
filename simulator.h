@@ -419,6 +419,55 @@ public:
         return {f_measure, accuracy};
     }
 
+    /**
+     * 埋め込み法 (Embedded AIC) によるMSEシミュレーション (進捗表示あり)
+     * @return MSE
+     */
+    double getMSE_EmbeddedAIC_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        
+        // 進捗カウント用 (アトミック変数)
+        std::atomic<int> completed_trials(0);
+
+        #pragma omp parallel reduction(+:totalSquaredError)
+        {
+            SimulationParameters local_params = params_;
+            local_params.seed += omp_get_thread_num(); 
+            Channel local_channel(local_params, W_master_);
+            Transceiver local_transceiver(local_params, W_master_);
+
+            #pragma omp for schedule(dynamic)
+            for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+            {
+                local_transceiver.setX_();
+                local_channel.generateFrequencyResponse(fd_Ts_);
+                local_transceiver.setY_(local_channel.getH(), noiseSD_);
+                
+                // 埋め込み法を実行
+                local_transceiver.equalizeWithEmbeddedAIC();
+                
+                totalSquaredError += local_transceiver.getMSE();
+
+                // --- 進捗表示ロジック ---
+                int current_count = ++completed_trials;
+                // 10%刻み、または100回に1回など適度な頻度で表示
+                if (NUMBER_OF_TRIAL >= 10 && (current_count % (NUMBER_OF_TRIAL / 10) == 0)) 
+                {
+                    #pragma omp critical
+                    {
+                        double progress = (double)current_count / NUMBER_OF_TRIAL * 100.0;
+                        std::cout << "\rProgress: " << (int)progress << "% (" << current_count << "/" << NUMBER_OF_TRIAL << ")" << std::flush;
+                    }
+                }
+            }
+        }
+        // ループ終了後に改行
+        std::cout << "\rProgress: 100% (" << NUMBER_OF_TRIAL << "/" << NUMBER_OF_TRIAL << ") Done.   " << std::endl;
+        
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+    }
+
 private:
     SimulationParameters params_;
     Eigen::MatrixXcd W_master_;
