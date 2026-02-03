@@ -440,6 +440,48 @@ public:
         return true;
     }
 
+    /**
+     * 文献の式(61)に基づく伝送路推定評価値（SNR劣化比）を計算する
+     * 値が 1.0 に近いほど良い（1.0 = 劣化なし）。
+     * @param noiseSD 真の雑音標準偏差
+     * @return 1試行あたりの平均評価値
+     */
+    double getSNRDegradationMetric(double noiseSD)
+    {
+        double sum_metric = 0.0;
+        int count = 0;
+        // β = 1 / σ_n^2
+        double beta = 1.0 / (noiseSD * noiseSD);
+        // σ_X^2 = 1.0 (シンボル生成時に正規化されているため)
+        double sigma_X_sq = 1.0; 
+
+        for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
+        {
+            for (int k = 0; k < params_.K_; k++)
+            {
+                
+                double norm_H_sq = std::norm(H_true_(l, k)); // |H|^2
+
+                // 真のチャネルゲインがほぼ0の場合のゼロ除算回避
+                if (norm_H_sq < 1e-20) continue;
+
+                // 式(61) の計算
+                // 第1項
+                double term1 = ((std::norm(std::conj(H_est_(l, k)) * H_true_(l, k)) / norm_H_sq )- 1) * sigma_X_sq * beta;
+                
+                // 第2項
+                double term2 = std::norm(H_est_(l, k)) / norm_H_sq;
+                
+                // 和が指標値
+                sum_metric += (term1 + term2);
+                count++;
+            }
+        }
+        
+        if (count == 0) return 1.0;
+        return sum_metric / count;
+    }
+
 private:
     const SimulationParameters &params_;
     const Eigen::MatrixXcd &W_est_;

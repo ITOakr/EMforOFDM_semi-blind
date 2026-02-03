@@ -104,6 +104,8 @@ int main()
 	std::cout << "16: AIC Path Selection Accuracy vs Doppler (fixed Eb/N0)" << std::endl;
     std::cout << "17: AIC F-Measure vs Doppler (fixed Eb/N0)" << std::endl;
 	std::cout << "18: Embedded AIC Method MSE vs Eb/N0" << std::endl;
+	std::cout << "19: Wrapper AIC Method SNR Degradation Ratio vs Doppler" << std::endl;
+	std::cout << "20: Pilot Only SNR Degradation Ratio vs Doppler" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -311,7 +313,7 @@ int main()
 		sim.setNoiseSD(fixedEbN0dB);
 		double mse;
 
-		for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; dopplerFrequency += dopplerStep) {
+		for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
 			sim.setDopplerFrequency(dopplerFrequency);
 
 			mse = sim.getMSE_simulation_only_pilot();
@@ -319,6 +321,13 @@ int main()
 			std::cout << "-----------" << std::endl;
 			std::cout << "f_dT_s = " << dopplerFrequency << ", MSE = " << mse << std::endl;
 			ofs << dopplerFrequency << "," << mse << std::endl;
+
+            // ★追加: ドップラー周波数の更新ロジック (0 -> step -> 2倍...)
+            if (dopplerFrequency == 0.0) {
+                dopplerFrequency = dopplerStep;
+            } else {
+                dopplerFrequency *= 2.0;
+            }
 		}
 	}
 	else if (mode_select == 10) // ★ モード10の追加
@@ -579,6 +588,90 @@ int main()
             }
         }
 		// ★合計時間の計測終了と表示
+        auto end_total = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_total = end_total - start_total;
+        
+        std::cout << "========================================" << std::endl;
+        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+        std::cout << "========================================" << std::endl;
+    }
+	else if (mode_select == 19)
+    {
+        // --- モード19: Wrapper法 SNR劣化比 (Degradation Ratio) vs Doppler ---
+        int fixedEbN0dB;
+        std::cout << "Enter fixed Eb/N0 [dB]: ";
+        std::cin >> fixedEbN0dB;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_WrapperAIC_SNRDegradation.csv";
+        ofs.open(fileName);
+        ofs << "f_dT_s,DegradationRatio" << std::endl;
+
+        sim.setNoiseSD((double)fixedEbN0dB);
+
+        // 合計時間の計測開始
+        auto start_total = std::chrono::high_resolution_clock::now();
+
+        for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+            sim.setDopplerFrequency(dopplerFrequency);
+            
+            std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
+            
+            // Wrapper法でのSNR劣化比シミュレーション
+            double degradation = sim.getSNRDegradation_WrapperAIC_Simulation();
+
+            std::cout << " Result: Ratio = " << degradation << " (1.0 is Ideal)" << std::endl;
+            ofs << dopplerFrequency << "," << degradation << std::endl;
+
+            // ドップラー周波数の更新
+            if (dopplerFrequency == 0.0) dopplerFrequency = dopplerStep;
+            else dopplerFrequency *= 2.0;
+        }
+
+        // 合計時間の計測終了と表示
+        auto end_total = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_total = end_total - start_total;
+        
+        std::cout << "========================================" << std::endl;
+        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+        std::cout << "========================================" << std::endl;
+    }
+	else if (mode_select == 20)
+    {
+        // --- モード20: Pilot Only SNR劣化比 (Degradation Ratio) vs Doppler ---
+        int fixedEbN0dB;
+        std::cout << "Enter fixed Eb/N0 [dB]: ";
+        std::cin >> fixedEbN0dB;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_PilotOnly_SNRDegradation.csv";
+        ofs.open(fileName);
+        ofs << "f_dT_s,DegradationRatio" << std::endl;
+
+        sim.setNoiseSD((double)fixedEbN0dB);
+
+        // 合計時間の計測開始
+        auto start_total = std::chrono::high_resolution_clock::now();
+
+        // ドップラー周波数をスイープ (0 -> step -> *2 -> *2 ...)
+        for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+            sim.setDopplerFrequency(dopplerFrequency);
+            
+            std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
+            
+            // パイロットのみでのSNR劣化比シミュレーション
+            double degradation = sim.getSNRDegradation_PilotOnly_Simulation();
+
+            std::cout << " Result: Ratio = " << degradation << " (1.0 is Ideal)" << std::endl;
+            ofs << dopplerFrequency << "," << degradation << std::endl;
+
+            // ドップラー周波数の更新
+            if (dopplerFrequency == 0.0) {
+                dopplerFrequency = dopplerStep;
+            } else {
+                dopplerFrequency *= 2.0;
+            }
+        }
+
+        // 合計時間の計測終了と表示
         auto end_total = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         

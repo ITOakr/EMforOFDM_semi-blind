@@ -468,6 +468,106 @@ public:
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
     }
 
+    /**
+     * Wrapper法 (Wrapper AIC) によるSNR劣化比シミュレーション (並列化・進捗表示)
+     * @return 平均SNR劣化比
+     */
+    double getSNRDegradation_WrapperAIC_Simulation()
+    {
+        double totalMetric = 0.0;
+        
+        // 進捗カウント用の変数
+        std::atomic<int> completed_trials(0);
+
+        #pragma omp parallel reduction(+:totalMetric)
+        {
+            SimulationParameters local_params = params_;
+            local_params.seed += omp_get_thread_num(); 
+            Channel local_channel(local_params, W_master_);
+            Transceiver local_transceiver(local_params, W_master_);
+
+            #pragma omp for
+            for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+            {
+                local_transceiver.setX_();
+                local_channel.generateFrequencyResponse(fd_Ts_);
+                local_transceiver.setY_(local_channel.getH(), noiseSD_);
+                
+                // Wrapper法を実行
+                local_transceiver.equalizeWithWrapperAIC();
+                
+                // 評価指標の計算 (noiseSDが必要)
+                totalMetric += local_transceiver.getSNRDegradationMetric(noiseSD_);
+
+                // --- 進捗表示ロジック ---
+                int current_count = ++completed_trials;
+                if (NUMBER_OF_TRIAL >= 10 && (current_count % (NUMBER_OF_TRIAL / 10) == 0)) 
+                {
+                    #pragma omp critical
+                    {
+                        double progress = (double)current_count / NUMBER_OF_TRIAL * 100.0;
+                        std::cout << "\rProgress: " << (int)progress << "% (" << current_count << "/" << NUMBER_OF_TRIAL << ")   " << std::flush;
+                    }
+                }
+            }
+        }
+        
+        std::cout << "\rProgress: 100% (" << NUMBER_OF_TRIAL << "/" << NUMBER_OF_TRIAL << ") Done.   " << std::endl;
+        
+        return totalMetric / (double)NUMBER_OF_TRIAL;
+    }
+
+    /**
+     * パイロットシンボルのみを用いた推定によるSNR劣化比シミュレーション (並列化・進捗表示)
+     * @return 平均SNR劣化比
+     */
+    double getSNRDegradation_PilotOnly_Simulation()
+    {
+        double totalMetric = 0.0;
+        
+        // 進捗カウント用の変数 (スレッドセーフ)
+        std::atomic<int> completed_trials(0);
+
+        #pragma omp parallel reduction(+:totalMetric)
+        {
+            SimulationParameters local_params = params_;
+            local_params.seed += omp_get_thread_num(); 
+            Channel local_channel(local_params, W_master_);
+            Transceiver local_transceiver(local_params, W_master_);
+
+            #pragma omp for
+            for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+            {
+                local_transceiver.setX_();
+                local_channel.generateFrequencyResponse(fd_Ts_);
+                local_transceiver.setY_(local_channel.getH(), noiseSD_);
+                
+                // パイロットシンボルのみで等化（AIC推定含む）
+                // これにより H_est_ がパイロット時点の推定値で埋められます
+                local_transceiver.equalizeByPilotAndDemodulate();
+                
+                // 評価指標の計算
+                totalMetric += local_transceiver.getSNRDegradationMetric(noiseSD_);
+
+                // --- 進捗表示ロジック ---
+                int current_count = ++completed_trials;
+                // 10%刻みで表示
+                if (NUMBER_OF_TRIAL >= 10 && (current_count % (NUMBER_OF_TRIAL / 10) == 0)) 
+                {
+                    #pragma omp critical
+                    {
+                        double progress = (double)current_count / NUMBER_OF_TRIAL * 100.0;
+                        std::cout << "\rProgress: " << (int)progress << "% (" << current_count << "/" << NUMBER_OF_TRIAL << ")   " << std::flush;
+                    }
+                }
+            }
+        }
+        
+        std::cout << "\rProgress: 100% (" << NUMBER_OF_TRIAL << "/" << NUMBER_OF_TRIAL << ") Done.   " << std::endl;
+        
+        return totalMetric / (double)NUMBER_OF_TRIAL;
+    }
+
 private:
     SimulationParameters params_;
     Eigen::MatrixXcd W_master_;
