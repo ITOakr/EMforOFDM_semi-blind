@@ -27,7 +27,7 @@ static const double dopplerStep = 0.0002;
 // ファイル
 std::string fileName;       // ファイル名
 std::ofstream ofs;        // 出力ファイル  
-const std::string outputDir = "C:/Users/Akira Ito/code2025/results/2path_L=11_iter_symbol/";
+const std::string outputDir = "C:/Users/Akira Ito/code2025/results/Sim_20260204~/";
 
 // BER
 double ber;
@@ -106,6 +106,7 @@ int main()
 	std::cout << "18: Embedded AIC Method MSE vs Eb/N0" << std::endl;
 	std::cout << "19: Wrapper AIC Method SNR Degradation Ratio vs Doppler" << std::endl;
 	std::cout << "20: Pilot Only SNR Degradation Ratio vs Doppler" << std::endl;
+	std::cout << "21: Pilot AIC Fixed Path MSE vs Doppler" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -678,6 +679,35 @@ int main()
         std::cout << "========================================" << std::endl;
         std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
         std::cout << "========================================" << std::endl;
+    }
+	else if (mode_select == 21)
+    {
+        // --- モード21: パイロットAIC固定パス法 MSE ---
+        int fixedEbN0dB;
+        std::cout << "Enter fixed Eb/N0 [dB]: ";
+        std::cin >> fixedEbN0dB;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_PilotAICFixed_MSE.csv";
+        ofs.open(fileName);
+
+        sim.setNoiseSD((double)fixedEbN0dB);
+        auto start_total = std::chrono::high_resolution_clock::now();
+
+        for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+            sim.setDopplerFrequency(dopplerFrequency);
+            std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
+
+            double mse = sim.getMSE_PilotAICFixedPath_Simulation();
+
+            std::cout << " Result: MSE = " << mse << std::endl;
+            ofs << dopplerFrequency << "," << mse << std::endl;
+
+            if (dopplerFrequency == 0.0) dopplerFrequency = dopplerStep;
+            else dopplerFrequency *= 2.0;
+        }
+        auto end_total = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_total = end_total - start_total;
+        std::cout << "Total Time: " << elapsed_total.count() << "s" << std::endl;
     }
 	else
 	{

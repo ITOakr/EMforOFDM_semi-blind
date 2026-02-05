@@ -459,7 +459,7 @@ public:
         {
             for (int k = 0; k < params_.K_; k++)
             {
-                
+
                 double norm_H_sq = std::norm(H_true_(l, k)); // |H|^2
 
                 // 真のチャネルゲインがほぼ0の場合のゼロ除算回避
@@ -480,6 +480,57 @@ public:
         
         if (count == 0) return 1.0;
         return sum_metric / count;
+    }
+
+    /**
+     * パイロットAIC固定パス法
+     * パイロットでAICを行いパスを選択し、そのパスを固定してデータ部のEM推定を行う
+     */
+    double equalizeWithPilotAICFixedPath()
+    {
+        // 1. パイロットシンボルを用いてAICによる初期推定を行う
+        // これにより、h_l にはAICで選ばれたパス成分のみが入り、他は0になる
+        set_initial_params_by_pilot();
+
+        // 2. AICで選ばれたパスを activePathIndices_ に固定する
+        activePathIndices_.clear();
+        for(int q = 0; q < params_.Q_; ++q) {
+            // h_l の成分が非ゼロ（採用されたパス）であればインデックスを追加
+            if(std::norm(h_l(q)) > 1e-20) { 
+                activePathIndices_.push_back(q);
+            }
+        }
+        // (念のためソート)
+        std::sort(activePathIndices_.begin(), activePathIndices_.end());
+
+        // パイロット区間のH_estを保存
+        H_est_.row(0) = (W_est_ * h_l).transpose();
+
+        double total_iterations_sum = 0.0;
+        int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
+
+        // 3. データシンボルごとのループ (パスは固定)
+        for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
+        {
+            // runEMLoop は activePathIndices_ に含まれるパスのみを更新する
+            // ここではパイロットで決めたパス構成が維持される
+            int iter = runEMLoop(l);
+            
+            total_iterations_sum += iter;
+
+            // 結果の格納
+            H_est_.row(l) = (W_est_ * h_l).transpose();
+            for (int k = 0; k < params_.K_; k++)
+            {
+                std::complex<double> val = (W_est_.row(k) * h_l)(0);
+                // ゼロ除算回避
+                if(std::abs(val) < 1e-12) val = 1e-12;
+                
+                R_(l, k) = Y_(l, k) / val;
+            }
+        }
+
+        return total_iterations_sum / static_cast<double>(dataSymbolCount);
     }
 
 private:
