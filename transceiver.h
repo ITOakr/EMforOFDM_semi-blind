@@ -198,6 +198,7 @@ public:
 
             // フルモデルの結果を保存
             Eigen::VectorXcd h_full = h_l;
+            // std::cout << "h_full=" << h_full << std::endl;
             double noise_full = noiseVariance_;
 
             // ---------------------------------------------------------
@@ -533,6 +534,72 @@ public:
         return total_iterations_sum / static_cast<double>(dataSymbolCount);
     }
 
+    /**
+     * [Mode 23用] 指定したサブキャリアの送信信号(X)の時間変動を出力
+     */
+    void exportTxSymbolTrace(int target_k, const std::string& filename)
+    {
+        std::ofstream ofs(filename);
+        if (!ofs) {
+            std::cerr << "Error: Could not open file " << filename << std::endl;
+            return;
+        }
+
+        // ヘッダー: l(時間/シンボル番号), I成分, Q成分, 振幅, 位相
+        ofs << "l,Tx_I,Tx_Q,Tx_Abs,Tx_Phase" << std::endl;
+
+        for (int l = 0; l < params_.L_; l++)
+        {
+            // 送信信号 X
+            std::complex<double> val = X_(l, target_k);
+
+            ofs << l << ","
+                << val.real() << ","
+                << val.imag() << ","
+                << std::abs(val) << ","
+                << std::arg(val)
+                << std::endl;
+        }
+        ofs.close();
+        std::cout << "Exported Tx Trace (k=" << target_k << ") to " << filename << std::endl;
+    }
+
+    /**
+     * [Mode 24用] 指定したサブキャリアの「周波数応答の影響を受けた送信信号(HX)」の時間変動を出力
+     * ※ H は外部（Channelクラス）から渡してもらう
+     */
+    void exportFadedSymbolTrace(int target_k, const std::string& filename, const Eigen::MatrixXcd& H_current)
+    {
+        std::ofstream ofs(filename);
+        if (!ofs) {
+            std::cerr << "Error: Could not open file " << filename << std::endl;
+            return;
+        }
+
+        // ヘッダー
+        ofs << "l,Faded_I,Faded_Q,Faded_Abs,Faded_Phase" << std::endl;
+
+        for (int l = 0; l < params_.L_; l++)
+        {
+            // 送信信号 X
+            std::complex<double> x_val = X_(l, target_k);
+            // チャネル H
+            std::complex<double> h_val = H_current(l, target_k);
+            
+            // 影響を受けた信号 (Noiseなし)
+            std::complex<double> val = h_val * x_val;
+
+            ofs << l << ","
+                << val.real() << ","
+                << val.imag() << ","
+                << std::abs(val) << ","
+                << std::arg(val)
+                << std::endl;
+        }
+        ofs.close();
+        std::cout << "Exported Faded Trace (k=" << target_k << ") to " << filename << std::endl;
+    }
+
 private:
     const SimulationParameters &params_;
     const Eigen::MatrixXcd &W_est_;
@@ -638,7 +705,6 @@ private:
         // std::cout << "W_est_ >> " << W_est_.transpose() << std::endl;
 
         for (int Q_tilde = 1; Q_tilde <= params_.Q_; ++Q_tilde) {
-
             // インデックスのソート
             std::vector<int> selected_indices;
             for (int i = 0; i < Q_tilde; ++i) {

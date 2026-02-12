@@ -612,6 +612,41 @@ public:
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
     }
 
+    /**
+     * [Mode 23] 送信信号波形の出力実行関数
+     */
+    void runExportTxWaveform(int target_k, const std::string& filename)
+    {
+        // 1回だけ試行環境を作る
+        SimulationParameters local_params = params_;
+        Transceiver local_transceiver(local_params, W_master_);
+
+        // 信号生成
+        local_transceiver.setX_();
+        
+        // 出力
+        local_transceiver.exportTxSymbolTrace(target_k, filename);
+    }
+
+    /**
+     * [Mode 24] フェージングを受けた信号波形の出力実行関数
+     */
+    void runExportFadedWaveform(int target_k, const std::string& filename)
+    {
+        // 1回だけ試行環境を作る
+        SimulationParameters local_params = params_;
+        Channel local_channel(local_params, W_master_);
+        Transceiver local_transceiver(local_params, W_master_);
+
+        // 信号生成
+        local_transceiver.setX_();
+        // チャネル生成 (ここでドップラー周波数 fd_Ts_ が使われます)
+        local_channel.generateFrequencyResponse(fd_Ts_);
+        
+        // 出力 (生成されたHを渡す)
+        local_transceiver.exportFadedSymbolTrace(target_k, filename, local_channel.getH());
+    }
+
 private:
     SimulationParameters params_;
     Eigen::MatrixXcd W_master_;

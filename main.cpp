@@ -107,6 +107,8 @@ int main()
 	std::cout << "19: Wrapper AIC Method SNR Degradation Ratio vs Doppler" << std::endl;
 	std::cout << "20: Pilot Only SNR Degradation Ratio vs Doppler" << std::endl;
 	std::cout << "21: Pilot AIC Fixed Path MSE vs Doppler" << std::endl;
+	std::cout << "23: Export Tx Waveform (k=10) vs Time" << std::endl;
+    std::cout << "24: Export Faded Tx Waveform (k=10) vs Time" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -708,6 +710,39 @@ int main()
         auto end_total = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         std::cout << "Total Time: " << elapsed_total.count() << "s" << std::endl;
+    }
+	else if (mode_select == 23)
+    {
+        // --- モード23: 送信信号 X の出力 ---
+        // ※送信信号そのものはドップラー周波数の影響を受けませんが、
+        //   シミュレーションの都合上、パラメータ設定などはそのまま通します。
+        
+        fileName = outputDir + timeStr + "_" + modulationName + "_TxWaveform_k10.csv";
+        
+        // ターゲットサブキャリア
+        int target_k = 10;
+        
+        std::cout << "Exporting Tx Signal for k=" << target_k << " ..." << std::endl;
+        sim.runExportTxWaveform(target_k, fileName);
+    }
+    else if (mode_select == 24)
+    {
+        // --- モード24: フェージングを受けた信号 HX の出力 ---
+        
+        // 動き（ドップラー）を設定させたい場合は入力を受け付ける
+        double inputDoppler;
+        std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+        std::cin >> inputDoppler;
+        
+        sim.setDopplerFrequency(inputDoppler);
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_FadedWaveform_k10.csv";
+        
+        // ターゲットサブキャリア
+        int target_k = 10;
+
+        std::cout << "Exporting Faded Signal for k=" << target_k << " ..." << std::endl;
+        sim.runExportFadedWaveform(target_k, fileName);
     }
 	else
 	{
