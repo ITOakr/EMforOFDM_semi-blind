@@ -177,6 +177,7 @@ public:
     {
         // 初期化: パイロットから初期推定
         set_initial_params_by_pilot();
+        // std::cout << "l=0: " << "h_l=" << h_l.transpose() << std::endl;
         H_est_.row(0) = (W_est_ * h_l).transpose();
 
         double total_iterations_sum = 0.0;
@@ -271,6 +272,7 @@ public:
             // Step 4: 最良モデルの結果を採用
             // ---------------------------------------------------------
             h_l = best_h_l;
+            // std::cout << "l=" << l << ": " << "h_l=" << h_l.transpose() << std::endl;
             noiseVariance_ = best_noise;
             total_iterations_sum += best_iter_count;
 
@@ -493,6 +495,8 @@ public:
         // これにより、h_l にはAICで選ばれたパス成分のみが入り、他は0になる
         set_initial_params_by_pilot();
 
+        // std::cout << "l=0: " << "h_l=" << h_l.transpose() << std::endl;
+
         // 2. AICで選ばれたパスを activePathIndices_ に固定する
         activePathIndices_.clear();
         for(int q = 0; q < params_.Q_; ++q) {
@@ -516,6 +520,7 @@ public:
             // runEMLoop は activePathIndices_ に含まれるパスのみを更新する
             // ここではパイロットで決めたパス構成が維持される
             int iter = runEMLoop(l);
+           //  std::cout << "l=" << l << ": " << h_l.transpose() << std::endl;
             
             total_iterations_sum += iter;
 
@@ -598,6 +603,31 @@ public:
         }
         ofs.close();
         std::cout << "Exported Faded Trace (k=" << target_k << ") to " << filename << std::endl;
+    }
+
+    /**
+     * [Mode 25用] 指定したサブキャリアのチャネル応答の絶対値(|H|)の時間変動を出力
+     */
+    void exportChannelMagnitudeTrace(int target_k, const std::string& filename, const Eigen::MatrixXcd& H_current)
+    {
+        std::ofstream ofs(filename);
+        if (!ofs) {
+            std::cerr << "Error: Could not open file " << filename << std::endl;
+            return;
+        }
+
+        // ヘッダー: l(シンボル番号), |H|
+        ofs << "l,H_Abs" << std::endl;
+
+        for (int l = 0; l < params_.L_; l++)
+        {
+            // 指定したサブキャリア k の複素チャネル利得の絶対値を計算
+            double h_mag = std::abs(H_current(l, target_k));
+
+            ofs << l << "," << h_mag << std::endl;
+        }
+        ofs.close();
+        std::cout << "Exported Channel Magnitude Trace (k=" << target_k << ") to " << filename << std::endl;
     }
 
 private:

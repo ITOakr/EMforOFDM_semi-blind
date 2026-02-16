@@ -647,6 +647,23 @@ public:
         local_transceiver.exportFadedSymbolTrace(target_k, filename, local_channel.getH());
     }
 
+    /**
+     * [Mode 25] チャネル応答の絶対値波形の出力実行関数
+     */
+    void runExportChannelMagnitude(int target_k, const std::string& filename)
+    {
+        // 1回だけ試行環境を作る
+        SimulationParameters local_params = params_;
+        Channel local_channel(local_params, W_master_);
+        Transceiver local_transceiver(local_params, W_master_);
+
+        // チャネル生成 (設定されているドップラー周波数 fd_Ts_ を使用)
+        local_channel.generateFrequencyResponse(fd_Ts_);
+        
+        // 出力実行
+        local_transceiver.exportChannelMagnitudeTrace(target_k, filename, local_channel.getH());
+    }
+
 private:
     SimulationParameters params_;
     Eigen::MatrixXcd W_master_;

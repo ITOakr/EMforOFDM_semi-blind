@@ -109,6 +109,7 @@ int main()
 	std::cout << "21: Pilot AIC Fixed Path MSE vs Doppler" << std::endl;
 	std::cout << "23: Export Tx Waveform (k=10) vs Time" << std::endl;
     std::cout << "24: Export Faded Tx Waveform (k=10) vs Time" << std::endl;
+	std::cout << "25: Export Channel Magnitude (|H|) (k=10) vs Time" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -743,6 +744,23 @@ int main()
 
         std::cout << "Exporting Faded Signal for k=" << target_k << " ..." << std::endl;
         sim.runExportFadedWaveform(target_k, fileName);
+    }
+	else if (mode_select == 25)
+    {
+        // --- モード25: チャネル応答 |H| の出力 ---
+        double inputDoppler;
+        std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+        std::cin >> inputDoppler;
+        sim.setDopplerFrequency(inputDoppler);
+
+        int target_k;
+        std::cout << "Enter target subcarrier index (k): ";
+        std::cin >> target_k; // ターミナルからkを入力
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_ChannelMagnitude_k" + std::to_string(target_k) + ".csv";
+        
+        std::cout << "Exporting Channel Magnitude for k=" << target_k << " ..." << std::endl;
+        sim.runExportChannelMagnitude(target_k, fileName);
     }
 	else
 	{
