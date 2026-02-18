@@ -54,6 +54,11 @@ public:
         return H_;
     }
 
+    const Eigen::MatrixXcd &get_h() const
+    {
+        return h_;
+    }
+
 private:
     const SimulationParameters &params_;
     const Eigen::MatrixXcd &W_;

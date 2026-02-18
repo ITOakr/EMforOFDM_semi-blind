@@ -664,6 +664,97 @@ public:
         local_transceiver.exportChannelMagnitudeTrace(target_k, filename, local_channel.getH());
     }
 
+    /**
+ * [Mode 26] 特定の時刻 l における周波数応答の絶対値 |H(k, l)| を横軸 k で出力
+ */
+void saveFrequencyResponseByK(int target_l, const std::string& filename)
+{
+    channel_.generateFrequencyResponse(fd_Ts_);
+    const auto& H = channel_.getH();
+    
+    std::ofstream ofs(filename);
+    ofs << "k,Magnitude" << std::endl;
+    for (int k = 0; k < params_.K_; ++k) {
+        ofs << k << "," << std::abs(H(target_l, k)) << std::endl;
+    }
+    ofs.close();
+}
+
+/**
+ * [Mode 27] 特定の時刻 l における真のインパルス応答 |h(q, l)| を横軸 q で出力
+ */
+void saveImpulseResponseByQ(int target_l, const std::string& filename)
+{
+    // チャネルの生成（指定されたドップラー条件で生成）
+    channel_.generateFrequencyResponse(fd_Ts_);
+    
+    // Channelクラスから時間領域の真のパス利得（複素数）を取得
+    // ※Channel.hに get_h() が実装されている必要があります
+    const auto& h_true = channel_.get_h(); 
+
+    std::ofstream ofs(filename);
+    if (!ofs) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        return;
+    }
+
+    ofs << "q,Magnitude" << std::endl;
+
+    // パス数 Q_ 分のループ
+    for (int q = 0; q < params_.Q_; ++q) {
+        // 時刻 target_l, パスインデックス q の絶対値を計算
+        double magnitude = std::abs(h_true(target_l, q));
+        ofs << q << "," << magnitude << std::endl;
+    }
+    
+    ofs.close();
+}
+
+/**
+ * [Mode 27修正版] 複数試行の平均インパルス応答 |h(q)| を横軸 q で出力
+ */
+void saveAverageImpulseResponseByQ(int target_l, const std::string& filename)
+{
+    // 各パスの電力を蓄積するベクトル
+    std::vector<double> avg_power_q(params_.Q_, 0.0);
+
+    std::cout << "Calculating average impulse response over " << NUMBER_OF_TRIAL << " trials..." << std::endl;
+
+    for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+    {
+        // 新しいチャネル（瞬時値）を生成
+        channel_.generateFrequencyResponse(fd_Ts_);
+        const auto& h_true = channel_.get_h(); //
+
+        for (int q = 0; q < params_.Q_; q++)
+        {
+            // 振幅ではなく「電力（絶対値の2乗）」で足し合わせるのが一般的です
+            double power = std::norm(h_true(target_l, q)); 
+            avg_power_q[q] += power;
+        }
+
+        // 進捗表示（10%ごと）
+        if (NUMBER_OF_TRIAL >= 10 && ((tri + 1) % (NUMBER_OF_TRIAL / 10) == 0)) {
+            std::cout << "\rProgress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+        }
+    }
+    std::cout << std::endl;
+
+    // ファイル出力
+    std::ofstream ofs(filename);
+    ofs << "q,AveragePower,AverageMagnitude,Power_dB" << std::endl;
+
+    for (int q = 0; q < params_.Q_; q++)
+    {
+        double mean_power = avg_power_q[q] / (double)NUMBER_OF_TRIAL;
+        double mean_magnitude = std::sqrt(mean_power);
+        double power_db = 10.0 * std::log10(mean_power + 1e-20); // 0除算防止
+
+        ofs << q << "," << mean_power << "," << mean_magnitude << "," << power_db << std::endl;
+    }
+    ofs.close();
+}
+
 private:
     SimulationParameters params_;
     Eigen::MatrixXcd W_master_;

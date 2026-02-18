@@ -20,7 +20,7 @@ struct SimulationParameters
     int seed = 100;
 
     // パスの有無を制御するマスク
-    std::vector<int> pathMask = {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0};
+    std::vector<int> pathMask = {1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     // DFT行列を生成する共通ロジック
     static Eigen::MatrixXcd generateW(int K, int Q, int FFT_size) {

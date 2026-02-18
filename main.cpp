@@ -110,6 +110,8 @@ int main()
 	std::cout << "23: Export Tx Waveform (k=10) vs Time" << std::endl;
     std::cout << "24: Export Faded Tx Waveform (k=10) vs Time" << std::endl;
 	std::cout << "25: Export Channel Magnitude (|H|) (k=10) vs Time" << std::endl;
+	std::cout << "26: Frequency Response (|H(k)|) vs Subcarrier k (Fixed l)" << std::endl;
+	std::cout << "27: Impulse Response (|h(q)|) vs Path Index q (Fixed l)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -762,6 +764,44 @@ int main()
         std::cout << "Exporting Channel Magnitude for k=" << target_k << " ..." << std::endl;
         sim.runExportChannelMagnitude(target_k, fileName);
     }
+	else if (mode_select == 26)
+	{
+		// --- モード26: 横軸kの周波数応答 ---
+		double inputDoppler;
+		std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cin >> inputDoppler;
+		sim.setDopplerFrequency(inputDoppler);
+
+		int target_l;
+		std::cout << "Enter target symbol index (l): ";
+		std::cin >> target_l;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_FreqResp_k_at_l" + std::to_string(target_l) + ".csv";
+		
+		std::cout << "Exporting Frequency Response vs k..." << std::endl;
+		sim.saveFrequencyResponseByK(target_l, fileName);
+		std::cout << "Saved to: " << fileName << std::endl;
+	}
+	else if (mode_select == 27)
+	{
+		// --- モード27: 平均インパルス応答 vs q ---
+		double inputDoppler;
+		std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cin >> inputDoppler;
+		sim.setDopplerFrequency(inputDoppler);
+
+		// 試行回数は main で最初に入力した numberOfTrials が使われます
+		int target_l = 0; // 特定のシンボル時刻（通常は0でOK）
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_AverageImpulseResp_q.csv";
+		
+		sim.saveAverageImpulseResponseByQ(target_l, fileName);
+		
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Average impulse response saved to: " << fileName << std::endl;
+		std::cout << "Check 'Power_dB' column to see the -1dB/path decay." << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
 	else
 	{
 		std::cout << "Invalid mode selected." << std::endl;
