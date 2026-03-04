@@ -112,6 +112,7 @@ int main()
 	std::cout << "25: Export Channel Magnitude (|H|) (k=10) vs Time" << std::endl;
 	std::cout << "26: Frequency Response (|H(k)|) vs Subcarrier k (Fixed l)" << std::endl;
 	std::cout << "27: Impulse Response (|h(q)|) vs Path Index q (Fixed l)" << std::endl;
+	std::cout << "28: Export Estimated Impulse Response (l=0, Q=16) to CSV" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -801,6 +802,27 @@ int main()
 		std::cout << "Average impulse response saved to: " << fileName << std::endl;
 		std::cout << "Check 'Power_dB' column to see the -1dB/path decay." << std::endl;
 		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+	else if (mode_select == 28)
+	{
+		// --- モード28: 推定インパルス応答の出力 ---
+		double inputDoppler;
+		std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cin >> inputDoppler;
+		sim.setDopplerFrequency(inputDoppler);
+
+		int fixedEbN0dB;
+		std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cin >> fixedEbN0dB;
+		sim.setNoiseSD(fixedEbN0dB);
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_EbN0_" + std::to_string(fixedEbN0dB) + "_EstImpulseResponse_l0.csv";
+		ofs.open(fileName);
+
+		std::cout << "Exporting Estimated Impulse Response (l=0, Q=16)..." << std::endl;
+		sim.saveEstimatedImpulseResponseToCSV(ofs, inputDoppler);
+
+		std::cout << "Successfully saved to: " << fileName << std::endl;
 	}
 	else
 	{

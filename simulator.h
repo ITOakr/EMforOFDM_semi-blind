@@ -755,6 +755,29 @@ void saveAverageImpulseResponseByQ(int target_l, const std::string& filename)
     ofs.close();
 }
 
+/**
+ * [Mode 28] パイロット区間 (l=0) における推定インパルス応答の保存
+ */
+void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
+    // 信号とチャネルの生成
+    transceiver_.setX_();
+    channel_.generateFrequencyResponse(fd_Ts);
+    transceiver_.setY_(channel_.getH(), noiseSD_);
+
+    // パイロット信号を用いた推定処理（h_est_ が更新される）
+    transceiver_.est_H_by_initial_h();
+
+    // 推定されたパス係数（16パス想定）の取得
+    Eigen::VectorXcd h_est = transceiver_.getEstimatedPathCoefficients();
+
+    // CSV出力
+    ofs << "Path_Index,Real,Imag,Magnitude" << std::endl;
+    for (int q = 0; q < h_est.size(); ++q) {
+        double mag = std::abs(h_est(q));
+        ofs << q << "," << h_est(q).real() << "," << h_est(q).imag() << "," << mag << std::endl;
+    }
+}
+
 private:
     SimulationParameters params_;
     Eigen::MatrixXcd W_master_;

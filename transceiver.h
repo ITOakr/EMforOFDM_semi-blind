@@ -630,6 +630,14 @@ public:
         std::cout << "Exported Channel Magnitude Trace (k=" << target_k << ") to " << filename << std::endl;
     }
 
+    /**
+     * 推定されたパス係数ベクトル (h_est_) を取得する
+     * @return Eigen::VectorXcd 推定パス係数ベクトル
+     */
+    Eigen::VectorXcd getEstimatedPathCoefficients() const {
+        return h_l;
+    }
+
 private:
     const SimulationParameters &params_;
     const Eigen::MatrixXcd &W_est_;
@@ -714,6 +722,10 @@ private:
     {
         X_l = X_.row(0).asDiagonal();
         h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
+
+        // for (int q = 0; q < params_.Q_; ++q) {
+        //     std::cout << "h_l(" << q << ") = " << std::norm(h_l(q)) << std::endl;
+        // }
 
         // 電力(norm)とインデックスのペアを作成
         std::vector<std::pair<double, int>> pathRank;
