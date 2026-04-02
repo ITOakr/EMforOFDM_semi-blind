@@ -113,6 +113,7 @@ int main()
 	std::cout << "26: Frequency Response (|H(k)|) vs Subcarrier k (Fixed l)" << std::endl;
 	std::cout << "27: Impulse Response (|h(q)|) vs Path Index q (Fixed l)" << std::endl;
 	std::cout << "28: Export Estimated Impulse Response (l=0, Q=16) to CSV" << std::endl;
+	std::cout << "29: MSE vs Frame Length L Sweep (fixed Eb/N0 & Doppler)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -823,6 +824,50 @@ int main()
 		sim.saveEstimatedImpulseResponseToCSV(ofs, inputDoppler);
 
 		std::cout << "Successfully saved to: " << fileName << std::endl;
+	}
+	else if (mode_select == 29)
+	{
+		// --- モード29: フレーム長 L スイープ ---
+		int fixedEbN0dB;
+		std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cin >> fixedEbN0dB;
+
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s: ";
+		std::cin >> dopplerFrequency;
+
+		int L_start, L_end, L_step;
+		std::cout << "Enter L start (min 2): "; std::cin >> L_start;
+		std::cout << "Enter L end: "; std::cin >> L_end;
+		std::cout << "Enter L step: "; std::cin >> L_step;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_EbN0_" + std::to_string(fixedEbN0dB) + "_fdTs_" + std::to_string(dopplerFrequency) + "_MSE_vs_L.csv";
+		ofs.open(fileName);
+		ofs << "L,MSE" << std::endl;
+
+		std::cout << "Starting L sweep simulation..." << std::endl;
+		auto start_total = std::chrono::high_resolution_clock::now();
+
+		for (int L = L_start; L <= L_end; L += L_step) {
+			params.L_ = L;
+			
+			// Lが変更されるたびに、行列のサイズをリサイズするためSimulatorを再生成します
+			Simulator sim_L(params);
+			sim_L.setTrialNum(numberOfTrials);
+			sim_L.setDopplerFrequency(dopplerFrequency);
+			sim_L.setNoiseSD(fixedEbN0dB);
+
+			// モード14（並列化版MSE）のロジックを使用してMSEを計算
+			double mse_val = sim_L.getMSE_simulation_parallel();
+
+			std::cout << "L = " << L << ", MSE = " << mse_val << std::endl;
+			ofs << L << "," << mse_val << std::endl;
+		}
+
+		auto end_total = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double> elapsed_total = end_total - start_total;
+		std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+		std::cout << "Results saved to: " << fileName << std::endl;
 	}
 	else
 	{
