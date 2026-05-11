@@ -59,6 +59,9 @@ public:
         return h_;
     }
 
+    // 遅延プロファイルのゲッター関数
+    const Eigen::VectorXd& getXi() const { return xi_; }
+
 private:
     const SimulationParameters &params_;
     const Eigen::MatrixXcd &W_;
