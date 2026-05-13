@@ -114,6 +114,8 @@ int main()
 	std::cout << "27: Impulse Response (|h(q)|) vs Path Index q (Fixed l)" << std::endl;
 	std::cout << "28: Export Estimated Impulse Response (l=0, Q=16) to CSV" << std::endl;
 	std::cout << "29: MSE vs Frame Length L Sweep (fixed Eb/N0 & Doppler)" << std::endl;
+	std::cout << "30: CRLB MSE vs Eb/N0 (fixed Doppler)" << std::endl;
+	std::cout << "31: Impulse Response (h) MSE Simulation vs Eb/N0" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -868,6 +870,52 @@ int main()
 		std::chrono::duration<double> elapsed_total = end_total - start_total;
 		std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
 		std::cout << "Results saved to: " << fileName << std::endl;
+	}
+	else if (mode_select == 30)
+	{
+		// --- モード30: CRLB 理論線出力 ---
+		fileName = outputDir + timeStr + "_" + modulationName + "_CRLB_vs_EbN0.csv";
+		ofs.open(fileName);
+        
+		ofs << "EbN0dB,CRLB_MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			// シミュレータにノイズSDを設定 (ここで noiseSD_ が計算・保持される)
+			sim.setNoiseSD(EbN0dB);
+			
+			// 保持されている noiseSD_ を使って理論値を計算
+			double crlb_mse = sim.getTheoreticalCRLB_H_MSE_FinalForm();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", CRLB MSE = " << crlb_mse << std::endl;
+			ofs << EbN0dB << "," << crlb_mse << std::endl;
+		}
+	}
+	else if (mode_select == 31)
+	{
+		// --- モード31: インパルス応答 (h) のMSEシミュレーション ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		// ファイル名の設定
+		fileName = outputDir + timeStr + "_" + modulationName + "_fdTs_" + std::to_string(dopplerFrequency) + "_ImpulseResponse_MSE_vs_EbN0.csv";
+		ofs.open(fileName);
+        
+		// CSVのヘッダーを出力
+		ofs << "EbN0dB,Impulse_MSE" << std::endl;
+
+		// Eb/N0をスイープさせてシミュレーションを実行
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			mse = sim.getImpulseResponseMSE_simulation();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", Impulse MSE = " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
 	}
 	else
 	{

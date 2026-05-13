@@ -778,6 +778,129 @@ void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
     }
 }
 
+/**
+     * ベイジアン・クラメル・ラオ下界 (BCRLB) の計算
+     * @param EbN0dB EbN0 [dB]
+     * @return インパルス応答のMSEの理論下界値
+     */
+    double getTheoreticalCRLB_MSE()
+    {
+        // 1. ノイズ分散 σ^2 (シミュレータと同一の計算)
+        double noiseVar = noiseSD_ * noiseSD_; // σ^2 = (σ_n)^2
+
+        // 2. Channelクラスから遅延プロファイル ξ_q^2 を取得
+        const Eigen::VectorXd& xi = channel_.getXi();
+
+        double crlb_h = 0.0;
+        
+        // 3. 送信シンボルの電力の総和 Σ |X_k|^2
+        // 現状は平均電力1と仮定して K_ 倍
+        double sum_X_sq = (double)params_.K_; 
+
+        // 4. 下界式の計算: 式(35)の逆行列の対角成分の総和
+        for (int q = 0; q < params_.Q_; q++)
+        {
+            if (params_.pathMask[q] == 1) // パスが既知の条件
+            {
+                // |W_{k,q}|^2 = 1 なので、Σ |X_k|^2 |W_{k,q}|^2 = Σ |X_k|^2 = sum_X_sq となる
+                double fisher_info = (sum_X_sq / noiseVar) + (1.0 / xi(q));
+                crlb_h += 1.0 / fisher_info;
+            }
+        }
+
+        return crlb_h;
+    }
+
+    /**
+     * 誤差伝播則を用いた 周波数応答 (H) の CRLB (MSE理論下界) の計算
+     * @return 1サブキャリアあたりの平均MSEの下界
+     */
+    double getTheoreticalCRLB_H_MSE()
+    {
+        double noiseVar = noiseSD_ * noiseSD_;
+        double sum_X_sq = (double)params_.K_; 
+
+        // 1. インパルス応答 h の誤差共分散行列 C_h (サイズ Q x Q) を作成
+        // 今回は各パスが独立（対角行列）として計算します
+        Eigen::MatrixXcd C_h = Eigen::MatrixXcd::Zero(params_.Q_, params_.Q_);
+        for (int q = 0; q < params_.Q_; q++)
+        {
+            if (params_.pathMask[q] == 1) 
+            {
+                // 各パスの分散の下限 (CRLB)
+                C_h(q, q) = noiseVar / sum_X_sq; 
+            }
+        }
+
+        // 2. ★誤差伝播則による変換★ (C_H = W * C_h * W^H)
+        // Eigenでは W^H (エルミート転置) を .adjoint() で計算できます
+        Eigen::MatrixXcd C_H = W_master_ * C_h * W_master_.adjoint();
+
+        // 3. トレース (対角成分の和) をとって全体の二乗誤差を計算
+        // MSEは必ず実数になるため .real() で実部だけを取り出します
+        double total_mse_H = C_H.trace().real();
+
+        // 1サブキャリアあたりのMSEに平均化して返す
+        return total_mse_H / (double)params_.K_;
+    }
+
+    /**
+     * 画像の最終式に基づく 周波数応答 (H) の CRLB (理論下界) の計算
+     * @return 1サブキャリアあたりの平均MSEの下界
+     */
+    double getTheoreticalCRLB_H_MSE_FinalForm()
+    {
+        // 1. ノイズ分散 σ^2
+        double noiseVar = noiseSD_ * noiseSD_;
+        
+        // 2. パイロット電力の総和 K * P_x (今回は P_x = 1 として K_ になる)
+        double sum_X_sq = (double)params_.K_; 
+
+        // 3. 推定対象のパス数 (Q) をカウントする
+        int active_paths = 0;
+        for (int q = 0; q < params_.Q_; q++)
+        {
+            if (params_.pathMask[q] == 1) 
+            {
+                active_paths++;
+            }
+        }
+
+        // 4. ★最終式 Q * σ^2 / (K * P_x) の計算★
+        return (double)active_paths * noiseVar / sum_X_sq; 
+    }
+
+    /**
+     * インパルス応答（h）のMSEを計算するシミュレーション (パイロット区間)
+     */
+    double getImpulseResponseMSE_simulation()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+            
+            // 例: パイロットでの推定を実行
+            transceiver_.est_H_by_initial_h(); 
+            
+            // 1. 真のインパルス応答行列 (L x Q) を取得
+            const Eigen::MatrixXcd& h_true_matrix = channel_.get_h();
+            // パイロットシンボル(l=0)の真のインパルス応答ベクトル (Q x 1)
+            Eigen::VectorXcd h_true_l0 = h_true_matrix.row(0).transpose();
+
+            // 2. 推定されたインパルス応答ベクトル (Q x 1) を取得
+            Eigen::VectorXcd h_est = transceiver_.getEstimatedPathCoefficients();
+
+            // 3. インパルス応答の二乗誤差を計算
+            totalSquaredError += (h_true_l0 - h_est).squaredNorm();
+        }
+        
+        // 試行回数とパス数(Q)で平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.Q_);
+    }
+
 private:
     SimulationParameters params_;
     Eigen::MatrixXcd W_master_;
