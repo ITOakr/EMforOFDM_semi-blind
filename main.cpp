@@ -884,7 +884,7 @@ int main()
 			sim.setNoiseSD(EbN0dB);
 			
 			// 保持されている noiseSD_ を使って理論値を計算
-			double crlb_mse = sim.getTheoreticalCRLB_MSE();
+			double crlb_mse = sim.getTheoreticalCRLB_H_MSE_FinalForm();
 			
 			std::cout << "-----------" << std::endl;
 			std::cout << "EbN0dB = " << EbN0dB << ", CRLB MSE = " << crlb_mse << std::endl;

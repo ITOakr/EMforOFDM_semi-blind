@@ -812,6 +812,65 @@ void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
     }
 
     /**
+     * 誤差伝播則を用いた 周波数応答 (H) の CRLB (MSE理論下界) の計算
+     * @return 1サブキャリアあたりの平均MSEの下界
+     */
+    double getTheoreticalCRLB_H_MSE()
+    {
+        double noiseVar = noiseSD_ * noiseSD_;
+        double sum_X_sq = (double)params_.K_; 
+
+        // 1. インパルス応答 h の誤差共分散行列 C_h (サイズ Q x Q) を作成
+        // 今回は各パスが独立（対角行列）として計算します
+        Eigen::MatrixXcd C_h = Eigen::MatrixXcd::Zero(params_.Q_, params_.Q_);
+        for (int q = 0; q < params_.Q_; q++)
+        {
+            if (params_.pathMask[q] == 1) 
+            {
+                // 各パスの分散の下限 (CRLB)
+                C_h(q, q) = noiseVar / sum_X_sq; 
+            }
+        }
+
+        // 2. ★誤差伝播則による変換★ (C_H = W * C_h * W^H)
+        // Eigenでは W^H (エルミート転置) を .adjoint() で計算できます
+        Eigen::MatrixXcd C_H = W_master_ * C_h * W_master_.adjoint();
+
+        // 3. トレース (対角成分の和) をとって全体の二乗誤差を計算
+        // MSEは必ず実数になるため .real() で実部だけを取り出します
+        double total_mse_H = C_H.trace().real();
+
+        // 1サブキャリアあたりのMSEに平均化して返す
+        return total_mse_H / (double)params_.K_;
+    }
+
+    /**
+     * 画像の最終式に基づく 周波数応答 (H) の CRLB (理論下界) の計算
+     * @return 1サブキャリアあたりの平均MSEの下界
+     */
+    double getTheoreticalCRLB_H_MSE_FinalForm()
+    {
+        // 1. ノイズ分散 σ^2
+        double noiseVar = noiseSD_ * noiseSD_;
+        
+        // 2. パイロット電力の総和 K * P_x (今回は P_x = 1 として K_ になる)
+        double sum_X_sq = (double)params_.K_; 
+
+        // 3. 推定対象のパス数 (Q) をカウントする
+        int active_paths = 0;
+        for (int q = 0; q < params_.Q_; q++)
+        {
+            if (params_.pathMask[q] == 1) 
+            {
+                active_paths++;
+            }
+        }
+
+        // 4. ★最終式 Q * σ^2 / (K * P_x) の計算★
+        return (double)active_paths * noiseVar / sum_X_sq; 
+    }
+
+    /**
      * インパルス応答（h）のMSEを計算するシミュレーション (パイロット区間)
      */
     double getImpulseResponseMSE_simulation()
