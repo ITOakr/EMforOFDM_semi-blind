@@ -52,8 +52,16 @@ public:
         {
             for (int k = 0; k < params_.K_; k++)
             {
-                txData_(l, k) = unitIntUniformRand_();
-                X_(l, k) = symbol_(txData_(l, k));
+                if (l < params_.NUMBER_OF_PILOT)
+                {
+                    txData_(l, k) = 0;
+                    X_(l, k) = params_.PILOT_SYMBOL_;
+                }
+                else
+                {
+                    txData_(l, k) = unitIntUniformRand_();
+                    X_(l, k) = symbol_(txData_(l, k));
+                }
             }
         }
     }
@@ -128,8 +136,11 @@ public:
     double getMSE_during_pilot()
     {
         double mse = 0.0;
-        // データシンボル区間（パイロットを除く）のMSEを計算
-        mse = (H_true_.row(0) - H_est_.row(0)).squaredNorm();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            mse += (H_true_.row(l) - H_est_.row(l)).squaredNorm();
+        }
+        mse /= static_cast<double>(params_.NUMBER_OF_PILOT);
         return mse;
     }
 
@@ -145,13 +156,23 @@ public:
     // パイロットシンボルからhを推定し，Hを得る
     void est_H_by_initial_h(){
         set_initial_params_by_pilot();
-        H_est_.row(0) = (W_est_ * h_l).transpose();
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
         // std::cout << "OK6" << std::endl;
     }
 
     // パイロットシンボルから直接Hを推定する
     void est_H_by_pilot(){
-        H_est_.row(0) = (X_.row(0).asDiagonal()).inverse() * Y_.row(0).transpose();
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd H_init = ((X_avg.asDiagonal()).inverse() * Y_avg.transpose()).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
     }
 
     /**
@@ -178,7 +199,8 @@ public:
         // 初期化: パイロットから初期推定
         set_initial_params_by_pilot();
         // std::cout << "l=0: " << "h_l=" << h_l.transpose() << std::endl;
-        H_est_.row(0) = (W_est_ * h_l).transpose();
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int p = 0; p < params_.NUMBER_OF_PILOT; ++p) H_est_.row(p) = H_init;
 
         double total_iterations_sum = 0.0;
         int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
@@ -294,7 +316,8 @@ public:
     {
         // 初期化: パイロットから初期推定
         set_initial_params_by_pilot();
-        H_est_.row(0) = (W_est_ * h_l).transpose();
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int p = 0; p < params_.NUMBER_OF_PILOT; ++p) H_est_.row(p) = H_init;
 
         double total_iterations_sum = 0.0;
         int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
@@ -509,7 +532,8 @@ public:
         std::sort(activePathIndices_.begin(), activePathIndices_.end());
 
         // パイロット区間のH_estを保存
-        H_est_.row(0) = (W_est_ * h_l).transpose();
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int p = 0; p < params_.NUMBER_OF_PILOT; ++p) H_est_.row(p) = H_init;
 
         double total_iterations_sum = 0.0;
         int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
@@ -720,8 +744,11 @@ private:
     // パイロットシンボルからｈの初期値を得る
     void set_initial_params_by_pilot()
     {
-        X_l = X_.row(0).asDiagonal();
-        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
 
         // for (int q = 0; q < params_.Q_; ++q) {
         //     std::cout << "h_l(" << q << ") = " << std::norm(h_l(q)) << std::endl;
@@ -764,9 +791,9 @@ private:
             // std::cout << "W_tilde >> " << W_tilde << std::endl;
 
             // 各パスモデルにおける推定値を計算
-            Eigen::VectorXcd h_active = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
+            Eigen::VectorXcd h_active = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose();
             // std::cout << "h_l >> " << h_tilde_list[Q_tilde - 1] << std::endl;
-            double residual = (Y_.row(0).transpose() - X_l * W_tilde * h_active).squaredNorm();
+            double residual = (Y_avg.transpose() - X_l * W_tilde * h_active).squaredNorm();
             beta_list[Q_tilde - 1] = (double)params_.K_ / residual;
 
             // AIC の計算
@@ -793,7 +820,7 @@ private:
             W_final.col(i) = W_est_.col(final_indices[i]);
         }
 
-        Eigen::VectorXcd h_final_active = (W_final.adjoint() * X_l.adjoint() * X_l * W_final).inverse() * W_final.adjoint() * X_l.adjoint() * Y_.row(0).transpose();
+        Eigen::VectorXcd h_final_active = (W_final.adjoint() * X_l.adjoint() * X_l * W_final).inverse() * W_final.adjoint() * X_l.adjoint() * Y_avg.transpose();
         // std::cout << "h_final_active >> " << h_final_active << std::endl;
 
         // フルサイズ配列への展開（非採用パスは0埋め）
@@ -810,11 +837,15 @@ private:
     void equalizeChannelWithPilot()
     {
         set_initial_params_by_pilot();
-        H_est_.row(0) = (W_est_ * h_l).transpose();
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
 
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
         {
-            H_est_.row(l) = (W_est_ * h_l).transpose();
+            H_est_.row(l) = H_init;
             for (int k = 0; k < params_.K_; k++)
             {
                 R_(l, k) = Y_(l, k) / (W_est_.row(k) * h_l)(0);
@@ -826,7 +857,11 @@ private:
     {
         set_initial_params_by_pilot();
 
-        H_est_.row(0) = (W_est_ * h_l).transpose();
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
 
         const int MAX_ITER = 100;
         const int MIN_ITER = 3;

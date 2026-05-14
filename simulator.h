@@ -887,14 +887,17 @@ void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
             
             // 1. 真のインパルス応答行列 (L x Q) を取得
             const Eigen::MatrixXcd& h_true_matrix = channel_.get_h();
-            // パイロットシンボル(l=0)の真のインパルス応答ベクトル (Q x 1)
+            // パイロット1つ目と2つ目の真のインパルス応答ベクトル (Q x 1)
             Eigen::VectorXcd h_true_l0 = h_true_matrix.row(0).transpose();
+            Eigen::VectorXcd h_true_l1 = h_true_matrix.row(1).transpose();
 
             // 2. 推定されたインパルス応答ベクトル (Q x 1) を取得
             Eigen::VectorXcd h_est = transceiver_.getEstimatedPathCoefficients();
 
-            // 3. インパルス応答の二乗誤差を計算
-            totalSquaredError += (h_true_l0 - h_est).squaredNorm();
+            // 3. 2つのパイロットに対するインパルス応答の二乗誤差を計算して平均する
+            double mse_pilot_0 = (h_true_l0 - h_est).squaredNorm();
+            double mse_pilot_1 = (h_true_l1 - h_est).squaredNorm();
+            totalSquaredError += (mse_pilot_0 + mse_pilot_1) / 2.0;
         }
         
         // 試行回数とパス数(Q)で平均化

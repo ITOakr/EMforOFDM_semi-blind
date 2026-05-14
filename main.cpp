@@ -86,40 +86,41 @@ int main()
 	int mode_select = 0;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cout << "Select Simulation Mode" << std::endl;
-	std::cout << "1: Eb/N0 sweep (fixed Doppler)" << std::endl;
-	std::cout << "2: Doppler sweep (fixed Eb/N0)" << std::endl;
-    std::cout << "3: MSE Simulation" << std::endl;
-    std::cout << "4: Average Power Simulation" << std::endl;
-	std::cout << "5: only pilot Eb/N0 sweep (fixed Doppler)" << std::endl;
-	std::cout << "6: MSE Simulation pilot" << std::endl;
-	std::cout << "7: only pilot Doppler sweep (fixed Eb/N0)" << std::endl;
-	std::cout << "8: MSE Doppler sweep (fixed Eb/N0)" << std::endl;
-	std::cout << "9: MSE Doppler sweep only pilot (fixed Eb/N0)" << std::endl;
-	std::cout << "10: Channel Magnitude Response (|H(k, l)|) CSV Output" << std::endl;
-	std::cout << "11: Noise Variance MSE Doppler sweep (fixed Eb/N0)" << std::endl;
-	std::cout << "12: H MSE by initial h_est Doppler sweep (fixed Eb/N0)" << std::endl;
-	std::cout << "13: H MSE by initial H_est Doppler sweep (fixed Eb/N0)" << std::endl;
-	std::cout << "14: MSE vs Doppler sweep (parallel) (fixed Eb/N0)" << std::endl;
-	std::cout << "15: AIC Model Selection Accuracy vs Doppler (fixed Eb/N0)" << std::endl;
-	std::cout << "16: AIC Path Selection Accuracy vs Doppler (fixed Eb/N0)" << std::endl;
-    std::cout << "17: AIC F-Measure vs Doppler (fixed Eb/N0)" << std::endl;
-	std::cout << "18: Embedded AIC Method MSE vs Eb/N0" << std::endl;
-	std::cout << "19: Wrapper AIC Method SNR Degradation Ratio vs Doppler" << std::endl;
-	std::cout << "20: Pilot Only SNR Degradation Ratio vs Doppler" << std::endl;
-	std::cout << "21: Pilot AIC Fixed Path MSE vs Doppler" << std::endl;
-	std::cout << "23: Export Tx Waveform (k=10) vs Time" << std::endl;
-    std::cout << "24: Export Faded Tx Waveform (k=10) vs Time" << std::endl;
-	std::cout << "25: Export Channel Magnitude (|H|) (k=10) vs Time" << std::endl;
-	std::cout << "26: Frequency Response (|H(k)|) vs Subcarrier k (Fixed l)" << std::endl;
-	std::cout << "27: Impulse Response (|h(q)|) vs Path Index q (Fixed l)" << std::endl;
-	std::cout << "28: Export Estimated Impulse Response (l=0, Q=16) to CSV" << std::endl;
-	std::cout << "29: MSE vs Frame Length L Sweep (fixed Eb/N0 & Doppler)" << std::endl;
-	std::cout << "30: CRLB MSE vs Eb/N0 (fixed Doppler)" << std::endl;
-	std::cout << "31: Impulse Response (h) MSE Simulation vs Eb/N0" << std::endl;
+	std::cout << "1: BER vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "2: BER vs Doppler sweep (fixed Eb/N0)" << std::endl;
+    std::cout << "3: MSE vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+    std::cout << "4: Average power of the true channel response H" << std::endl;
+	std::cout << "5: BER vs Eb/N0 sweep for pilot-only mode (fixed Doppler)" << std::endl;
+	std::cout << "6: MSE vs Eb/N0 sweep for pilot-only mode (fixed Doppler)" << std::endl;
+	std::cout << "7: BER vs Doppler sweep for pilot-only mode (fixed Eb/N0)" << std::endl;
+	std::cout << "8: MSE vs Doppler sweep (fixed Eb/N0, 0 -> step -> double)" << std::endl;
+	std::cout << "9: MSE vs Doppler sweep for pilot-only mode (fixed Eb/N0, 0 -> step -> double)" << std::endl;
+	std::cout << "10: CSV output of channel magnitude response |H(k, l)|" << std::endl;
+	std::cout << "11: MSE of estimated noise variance vs Doppler sweep (fixed Eb/N0)" << std::endl;
+	std::cout << "12: MSE of h by initial h estimation vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "13: MSE of H by pilot estimation vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "14: Parallel MSE vs Doppler sweep (fixed Eb/N0)" << std::endl;
+	std::cout << "15: AIC model selection accuracy vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "16: AIC path selection accuracy vs Doppler (fixed Eb/N0)" << std::endl;
+    std::cout << "17: AIC path selection F-measure vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "18: Embedded AIC method MSE vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "19: Wrapper AIC method SNR degradation ratio vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "20: Pilot-only SNR degradation ratio vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "21: Pilot AIC fixed-path MSE vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "22: Unused" << std::endl;
+	std::cout << "23: Export transmit waveform X over time (k=10)" << std::endl;
+    std::cout << "24: Export faded waveform HX over time (k=10)" << std::endl;
+	std::cout << "25: Export channel magnitude |H| over time (k=10)" << std::endl;
+	std::cout << "26: Export frequency response |H(k, l)| along k for fixed l" << std::endl;
+	std::cout << "27: Export average impulse response along q for fixed l" << std::endl;
+	std::cout << "28: Export estimated impulse response (l=0, Q=16) to CSV" << std::endl;
+	std::cout << "29: Sweep frame length L and evaluate MSE (fixed Eb/N0 and Doppler)" << std::endl;
+	std::cout << "30: Sweep CRLB-based MSE vs Eb/N0 (fixed Doppler)" << std::endl;
+	std::cout << "31: Simulate impulse-response h MSE vs Eb/N0" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
-    std::cout << "Enter number of trials:" ;
+	std::cout << "Enter number of trials:" ;
 	std::cin >> numberOfTrials;
 	sim.setTrialNum(numberOfTrials);
 
@@ -197,7 +198,7 @@ int main()
     {
         // --- モード4: 平均電力計算 ---
         double dopplerFrequency;
-        std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
         std::cin >> dopplerFrequency;
 
         sim.setDopplerFrequency(dopplerFrequency);
@@ -205,8 +206,8 @@ int main()
         avgPower = sim.getAveragePower_simulation();
         
         std::cout << "--------------------------------------------------------------------" << std::endl;
-        std::cout << "Average power of the true channel response H over " << numberOfTrials << " trials." << std::endl;
-        std::cout << "f_d*T_s = " << dopplerFrequency << ", Average Power = " << avgPower << std::endl;
+		std::cout << "Average power of the true channel response H over " << numberOfTrials << " trials." << std::endl;
+		std::cout << "f_d*T_s = " << dopplerFrequency << ", Average Power = " << avgPower << std::endl;
         std::cout << "--------------------------------------------------------------------" << std::endl;
 
         // このモードではファイル出力はせず、コンソール表示のみとします。
@@ -469,14 +470,14 @@ int main()
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         
         std::cout << "========================================" << std::endl;
-        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+		std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
         std::cout << "========================================" << std::endl;
 	}
 	else if (mode_select == 15)
     {
         // --- モード15: AICモデル選択正答率 vs ドップラー周波数 ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
         std::cin >> fixedEbN0dB;
 
         fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_AIC_Model_Accuracy_vs_Doppler.csv";
@@ -506,7 +507,7 @@ int main()
     {
         // --- モード16: 正答率 (Accuracy) のみ出力 ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
         std::cin >> fixedEbN0dB;
 
         // ファイル名に Accuracy を明記
@@ -537,7 +538,7 @@ int main()
     {
         // --- モード17: F値 (F-Measure) のみ出力 ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
         std::cin >> fixedEbN0dB;
 
         // ファイル名に F_Measure を明記
@@ -568,7 +569,7 @@ int main()
     {
         // --- モード18: 埋め込み法 MSE vs Doppler (Eb/N0固定) ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
         std::cin >> fixedEbN0dB;
 
         // ファイル名を変更
@@ -602,14 +603,14 @@ int main()
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         
         std::cout << "========================================" << std::endl;
-        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+		std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
         std::cout << "========================================" << std::endl;
     }
 	else if (mode_select == 19)
     {
         // --- モード19: Wrapper法 SNR劣化比 (Degradation Ratio) vs Doppler ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
         std::cin >> fixedEbN0dB;
 
         fileName = outputDir + timeStr + "_" + modulationName + "_WrapperAIC_SNRDegradation.csv";
@@ -624,12 +625,12 @@ int main()
         for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
             sim.setDopplerFrequency(dopplerFrequency);
             
-            std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
+			std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
             
             // Wrapper法でのSNR劣化比シミュレーション
             double degradation = sim.getSNRDegradation_WrapperAIC_Simulation();
 
-            std::cout << " Result: Ratio = " << degradation << " (1.0 is Ideal)" << std::endl;
+			std::cout << " Result: Ratio = " << degradation << " (1.0 is Ideal)" << std::endl;
             ofs << dopplerFrequency << "," << degradation << std::endl;
 
             // ドップラー周波数の更新
@@ -642,14 +643,14 @@ int main()
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         
         std::cout << "========================================" << std::endl;
-        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+		std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
         std::cout << "========================================" << std::endl;
     }
 	else if (mode_select == 20)
     {
         // --- モード20: Pilot Only SNR劣化比 (Degradation Ratio) vs Doppler ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
         std::cin >> fixedEbN0dB;
 
         fileName = outputDir + timeStr + "_" + modulationName + "_PilotOnly_SNRDegradation.csv";
@@ -665,12 +666,12 @@ int main()
         for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
             sim.setDopplerFrequency(dopplerFrequency);
             
-            std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
+			std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
             
             // パイロットのみでのSNR劣化比シミュレーション
             double degradation = sim.getSNRDegradation_PilotOnly_Simulation();
 
-            std::cout << " Result: Ratio = " << degradation << " (1.0 is Ideal)" << std::endl;
+			std::cout << " Result: Ratio = " << degradation << " (1.0 is Ideal)" << std::endl;
             ofs << dopplerFrequency << "," << degradation << std::endl;
 
             // ドップラー周波数の更新
@@ -686,14 +687,14 @@ int main()
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         
         std::cout << "========================================" << std::endl;
-        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+		std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
         std::cout << "========================================" << std::endl;
     }
 	else if (mode_select == 21)
     {
         // --- モード21: パイロットAIC固定パス法 MSE ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
         std::cin >> fixedEbN0dB;
 
         fileName = outputDir + timeStr + "_" + modulationName + "_PilotAICFixed_MSE.csv";
@@ -704,11 +705,11 @@ int main()
 
         for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
             sim.setDopplerFrequency(dopplerFrequency);
-            std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
+			std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
 
             double mse = sim.getMSE_PilotAICFixedPath_Simulation();
 
-            std::cout << " Result: MSE = " << mse << std::endl;
+			std::cout << " Result: MSE = " << mse << std::endl;
             ofs << dopplerFrequency << "," << mse << std::endl;
 
             if (dopplerFrequency == 0.0) dopplerFrequency = dopplerStep;
@@ -716,7 +717,7 @@ int main()
         }
         auto end_total = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_total = end_total - start_total;
-        std::cout << "Total Time: " << elapsed_total.count() << "s" << std::endl;
+		std::cout << "Total Time: " << elapsed_total.count() << "s" << std::endl;
     }
 	else if (mode_select == 23)
     {
@@ -729,7 +730,7 @@ int main()
         // ターゲットサブキャリア
         int target_k = 10;
         
-        std::cout << "Exporting Tx Signal for k=" << target_k << " ..." << std::endl;
+		std::cout << "Exporting Tx Signal for k=" << target_k << " ..." << std::endl;
         sim.runExportTxWaveform(target_k, fileName);
     }
     else if (mode_select == 24)
@@ -738,7 +739,7 @@ int main()
         
         // 動き（ドップラー）を設定させたい場合は入力を受け付ける
         double inputDoppler;
-        std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
         std::cin >> inputDoppler;
         
         sim.setDopplerFrequency(inputDoppler);
@@ -748,31 +749,31 @@ int main()
         // ターゲットサブキャリア
         int target_k = 10;
 
-        std::cout << "Exporting Faded Signal for k=" << target_k << " ..." << std::endl;
+		std::cout << "Exporting Faded Signal for k=" << target_k << " ..." << std::endl;
         sim.runExportFadedWaveform(target_k, fileName);
     }
 	else if (mode_select == 25)
     {
         // --- モード25: チャネル応答 |H| の出力 ---
         double inputDoppler;
-        std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
         std::cin >> inputDoppler;
         sim.setDopplerFrequency(inputDoppler);
 
         int target_k;
-        std::cout << "Enter target subcarrier index (k): ";
+		std::cout << "Enter target subcarrier index (k): ";
         std::cin >> target_k; // ターミナルからkを入力
 
         fileName = outputDir + timeStr + "_" + modulationName + "_ChannelMagnitude_k" + std::to_string(target_k) + ".csv";
         
-        std::cout << "Exporting Channel Magnitude for k=" << target_k << " ..." << std::endl;
+		std::cout << "Exporting Channel Magnitude for k=" << target_k << " ..." << std::endl;
         sim.runExportChannelMagnitude(target_k, fileName);
     }
 	else if (mode_select == 26)
 	{
 		// --- モード26: 横軸kの周波数応答 ---
 		double inputDoppler;
-		std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
 		std::cin >> inputDoppler;
 		sim.setDopplerFrequency(inputDoppler);
 
@@ -790,7 +791,7 @@ int main()
 	{
 		// --- モード27: 平均インパルス応答 vs q ---
 		double inputDoppler;
-		std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
 		std::cin >> inputDoppler;
 		sim.setDopplerFrequency(inputDoppler);
 
@@ -810,12 +811,12 @@ int main()
 	{
 		// --- モード28: 推定インパルス応答の出力 ---
 		double inputDoppler;
-		std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
 		std::cin >> inputDoppler;
 		sim.setDopplerFrequency(inputDoppler);
 
 		int fixedEbN0dB;
-		std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
 		std::cin >> fixedEbN0dB;
 		sim.setNoiseSD(fixedEbN0dB);
 
@@ -825,17 +826,17 @@ int main()
 		std::cout << "Exporting Estimated Impulse Response (l=0, Q=16)..." << std::endl;
 		sim.saveEstimatedImpulseResponseToCSV(ofs, inputDoppler);
 
-		std::cout << "Successfully saved to: " << fileName << std::endl;
+		std::cout << "Saved to: " << fileName << std::endl;
 	}
 	else if (mode_select == 29)
 	{
 		// --- モード29: フレーム長 L スイープ ---
 		int fixedEbN0dB;
-		std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
 		std::cin >> fixedEbN0dB;
 
 		double dopplerFrequency;
-		std::cout << "Enter normalized Doppler f_d*T_s: ";
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
 		int L_start, L_end, L_step;
