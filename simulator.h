@@ -309,6 +309,94 @@ public:
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
     }
 
+    /**
+     * Mode34: 瞬時信号対雑音電力比 γ(ΔH) の平均を計算するシミュレーション
+     * - スウィープは外側の main で行うため、ここでは1つの設定(noiseSD_, fd_Ts_)で
+     *   NUMBER_OF_TRIAL 回試行し、(l,k)=(0,0) の γ を平均して返す。
+     */
+    double getInstantaneousSNR_Mode34_simulation()
+    {
+        double totalGamma = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // Hの推定は mode12 を参考にして初期推定(hによる推定)を使う
+            transceiver_.est_H_by_initial_h();
+
+            // ΔH を計算 (定義: H_est - H_true)
+            Eigen::RowVectorXcd delta = transceiver_.computeDeltaHRow(0);
+
+            // γ を計算し、(k=0) を取り出す
+            Eigen::VectorXd gamma_vec = transceiver_.computeGammaFromDeltaH(delta, 0, noiseSD_, 1.0, -1.0, true);
+            double gamma_k0 = 0.0;
+            if (gamma_vec.size() > 0) gamma_k0 = gamma_vec(0);
+
+            totalGamma += gamma_k0;
+        }
+
+        return totalGamma / (double)NUMBER_OF_TRIAL;
+    }
+
+    /**
+     * Mode35: 瞬時信号対雑音電力比 γ(ΔH) の平均を計算するシミュレーション
+     * - スウィープは外側の main で行うため、ここでは1つの設定(noiseSD_, fd_Ts_)で
+     *   NUMBER_OF_TRIAL 回試行し、(l,k)=(0,0) の γ を平均して返す。
+     */
+    double getInstantaneousSNR_Mode35_simulation()
+    {
+        double totalGamma = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 写真の x = -H/A を delta に入力する
+            // (l,k)=(0,0) を対象にするので、まずは行ベクトルを作って k=0 成分を使う
+            Eigen::RowVectorXcd delta = transceiver_.computeDeltaRowFromPhotoX(0, noiseSD_);
+
+            // γ を計算し、(k=0) を取り出す
+            Eigen::VectorXd gamma_vec = transceiver_.computeGammaFromDeltaH(delta, 0, noiseSD_, 1.0, -1.0, true);
+            double gamma_k0 = 0.0;
+            if (gamma_vec.size() > 0) gamma_k0 = gamma_vec(0);
+
+            totalGamma += gamma_k0;
+        }
+
+        return totalGamma / (double)NUMBER_OF_TRIAL;
+    }
+
+    /**
+     * Mode36: 瞬時信号対雑音電力比 γ(ΔH) の平均を計算するシミュレーション
+     * - スウィープは外側の main で行うため、ここでは1つの設定(noiseSD_, fd_Ts_)で
+     *   NUMBER_OF_TRIAL 回試行し、(l,k)=(0,0) の γ を平均して返す。
+     */
+    double getInstantaneousSNR_Mode36_simulation()
+    {
+        double totalGamma = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // γ を計算し、(k=0) を取り出す
+            Eigen::VectorXd gamma_vec = transceiver_.computeGamma_78(0, noiseSD_, 1.0, -1.0, true);
+            double gamma_k0 = 0.0;
+            if (gamma_vec.size() > 0) gamma_k0 = gamma_vec(0);
+
+            totalGamma += gamma_k0;
+        }
+
+        return totalGamma / (double)NUMBER_OF_TRIAL;
+    }
+
     double get_H_est_MSE_Simulation_during_pilot()
     {
         double totalSquaredError = 0.0;
@@ -322,6 +410,52 @@ public:
         }
         // 試行回数、データシンボル数、サブキャリア数で平均化
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * 真のパスモデルと既知の雑音分散を使った ML 推定の H のMSE を計算する
+     * @return 周波数応答HのMSE
+     */
+    double get_H_MSE_with_known_model_and_noise_during_pilot()
+    {
+        double total_H_squared_error = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            transceiver_.est_H_by_known_model_and_noise(noiseSD_ * noiseSD_);
+
+            total_H_squared_error += transceiver_.getMSE_during_pilot();
+        }
+
+        double H_mse = total_H_squared_error / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+        return H_mse;
+    }
+
+    /**
+     * 真のパスモデルと既知の雑音分散を使った ML 推定の H のMSE をフレーム先頭 (l=0) のみで計算する
+     * @return 周波数応答HのMSE (l=0)
+     */
+    double get_H_MSE_with_known_model_and_noise_at_l0()
+    {
+        double total_H_squared_error = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            transceiver_.est_H_by_known_model_and_noise(noiseSD_ * noiseSD_);
+
+            total_H_squared_error += transceiver_.getMSE_at_l0();
+        }
+
+        double H_mse = total_H_squared_error / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+        return H_mse;
     }
 
     /**
@@ -853,8 +987,8 @@ void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
         // 1. ノイズ分散 σ^2
         double noiseVar = noiseSD_ * noiseSD_;
         
-        // 2. パイロット電力の総和 K * P_x (今回は P_x = 1 として K_ になる)
-        double sum_X_sq = (double)params_.K_; 
+        // 2. パイロット電力の総和 K * P_x (今回は P_x = 1 として パイロットシンボルを2つ使う場合と比較するため，2.0倍している)
+        double sum_X_sq = (double)params_.K_ * (double)params_.NUMBER_OF_PILOT; 
 
         // 3. 推定対象のパス数 (Q) をカウントする
         int active_paths = 0;

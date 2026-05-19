@@ -117,6 +117,10 @@ int main()
 	std::cout << "29: Sweep frame length L and evaluate MSE (fixed Eb/N0 and Doppler)" << std::endl;
 	std::cout << "30: Sweep CRLB-based MSE vs Eb/N0 (fixed Doppler)" << std::endl;
 	std::cout << "31: Simulate impulse-response h MSE vs Eb/N0" << std::endl;
+	std::cout << "32: Known-model, known-noise ML validation (H MSE vs Eb/N0)" << std::endl;
+	std::cout << "33: Known-model, known-noise ML validation (H MSE at l=0 vs Eb/N0)" << std::endl;
+	std::cout << "34: Instantaneous SNR (gamma) mean vs Eb/N0 at (l,k)=(0,0)" << std::endl;
+	std::cout << "35: Instantaneous SNR (gamma) vs Eb/N0 at (l,k)=(0,0)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -916,6 +920,116 @@ int main()
 			std::cout << "-----------" << std::endl;
 			std::cout << "EbN0dB = " << EbN0dB << ", Impulse MSE = " << mse << std::endl;
 			ofs << EbN0dB << "," << mse << std::endl;
+		}
+	}
+	else if (mode_select == 32)
+	{
+		// --- モード32: 真のパスモデルと既知雑音分散での ML 推定の検証 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_KnownModelKnownNoise_HMSE_vs_EbN0.csv";
+		ofs.open(fileName);
+		ofs << "EbN0dB,H_MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double H_mse = sim.get_H_MSE_with_known_model_and_noise_during_pilot();
+
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", H_MSE = " << H_mse << std::endl;
+			ofs << EbN0dB << "," << H_mse << std::endl;
+		}
+	}
+	else if (mode_select == 33)
+	{
+		// --- モード33: 真のパスモデルと既知雑音分散での ML 推定の検証 先頭シンボル分 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_KnownModelKnownNoise_HMSE_vs_EbN0.csv";
+		ofs.open(fileName);
+		ofs << "EbN0dB,H_MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double H_mse = sim.get_H_MSE_with_known_model_and_noise_at_l0();
+
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", H_MSE = " << H_mse << std::endl;
+			ofs << EbN0dB << "," << H_mse << std::endl;
+		}
+	}
+	else if (mode_select == 34)
+	{
+		// --- モード34: 瞬時信号対雑音電力比 γ(ΔH) の平均を Eb/N0 スイープで出力 ---
+		double dopplerFrequency;
+		double gamma_mean;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_Gamma_vs_EbN0_MODE34.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			gamma_mean = sim.getInstantaneousSNR_Mode34_simulation();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", Mean Gamma(l=0,k=0) = " << gamma_mean << std::endl;
+			ofs << EbN0dB << "," << gamma_mean << std::endl;
+		}
+	}
+	else if (mode_select == 35)
+	{
+		// --- モード35: 瞬時信号対雑音電力比 γ(ΔH) の平均を Eb/N0 スイープで出力 ---
+		double dopplerFrequency;
+		double gamma_mean;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_Gamma_vs_EbN0_MODE35.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			gamma_mean = sim.getInstantaneousSNR_Mode35_simulation();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", Mean Gamma(l=0,k=0) = " << gamma_mean << std::endl;
+			ofs << EbN0dB << "," << gamma_mean << std::endl;
+		}
+	}
+	else if (mode_select == 36)
+	{
+		// --- モード36: 瞬時信号対雑音電力比 γ(ΔH) の平均を Eb/N0 スイープで出力 ---
+		double dopplerFrequency;
+		double gamma_mean;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_Gamma_vs_EbN0_MODE36.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			gamma_mean = sim.getInstantaneousSNR_Mode36_simulation();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", Mean Gamma(l=0,k=0) = " << gamma_mean << std::endl;
+			ofs << EbN0dB << "," << gamma_mean << std::endl;
 		}
 	}
 	else

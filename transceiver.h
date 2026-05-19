@@ -145,6 +145,15 @@ public:
     }
 
     /**
+     * フレーム先頭 (l=0) のチャネル推定MSEを計算する
+     * @return l=0における二乗誤差の合計
+     */
+    double getMSE_at_l0()
+    {
+        return (H_true_.row(0) - H_est_.row(0)).squaredNorm();
+    }
+
+    /**
      * 推定された雑音分散を取得する
      * @return 推定された雑音分散 noiseVariance_ の値
      */
@@ -162,6 +171,46 @@ public:
             H_est_.row(l) = H_init;
         }
         // std::cout << "OK6" << std::endl;
+    }
+
+    // 真のモデルと既知の雑音分散を使って、パイロットからML推定を行う
+    void est_H_by_known_model_and_noise(double knownNoiseVariance)
+    {
+        activePathIndices_.clear();
+        for (int q = 0; q < params_.Q_; ++q)
+        {
+            if (params_.pathMask[q] == 1)
+            {
+                activePathIndices_.push_back(q);
+            }
+        }
+
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+
+        Eigen::MatrixXcd W_active(params_.K_, static_cast<int>(activePathIndices_.size()));
+        for (int i = 0; i < static_cast<int>(activePathIndices_.size()); ++i)
+        {
+            W_active.col(i) = W_est_.col(activePathIndices_[i]);
+        }
+
+        Eigen::VectorXcd h_active = (W_active.adjoint() * X_l.adjoint() * X_l * W_active).inverse() * W_active.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+        h_l = Eigen::VectorXcd::Zero(params_.Q_);
+        for (int i = 0; i < static_cast<int>(activePathIndices_.size()); ++i)
+        {
+            h_l(activePathIndices_[i]) = h_active(i);
+        }
+
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
+
+        noiseVariance_ = knownNoiseVariance;
     }
 
     // パイロットシンボルから直接Hを推定する
@@ -660,6 +709,143 @@ public:
      */
     Eigen::VectorXcd getEstimatedPathCoefficients() const {
         return h_l;
+    }
+
+    /**
+     * ΔH を計算して返すヘルパー
+     * 定義: DeltaH = H_est - H_true
+     * @param l フレームインデックス
+     * @return 1 x K の行ベクトル (Eigen::RowVectorXcd)
+     */
+    Eigen::RowVectorXcd computeDeltaHRow(int l) const
+    {
+        if (l < 0 || l >= params_.L_) {
+            throw std::out_of_range("l is out of range in computeDeltaHRow");
+        }
+        return H_est_.row(l) - H_true_.row(l);
+    }
+
+    /**
+     * 添付画像の x = -H/A を使って delta 行ベクトルを作る
+     * A = |H_{l,k}|^2 P_x β + 1
+     * この関数は mode35 で、(l,k)=(0,0) の1要素に x を入れる用途を想定する。
+     */
+    Eigen::RowVectorXcd computeDeltaRowFromPhotoX(int l,
+                                                  double noiseSD,
+                                                  double Px = 1.0,
+                                                  double beta_override = -1.0) const
+    {
+        if (l < 0 || l >= params_.L_) {
+            throw std::out_of_range("l is out of range in computeDeltaRowFromPhotoX");
+        }
+
+        double beta = (beta_override > 0.0) ? beta_override : 1.0 / (noiseSD * noiseSD);
+        const double eps = 1e-12;
+
+        Eigen::RowVectorXcd delta = Eigen::RowVectorXcd::Zero(params_.K_);
+        for (int k = 0; k < params_.K_; ++k)
+        {
+            const std::complex<double> H = H_true_(l, k);
+            const double A = std::norm(H) * Px * beta + 1.0;
+            if (A < eps) {
+                continue;
+            }
+            delta(k) = -H / A;
+        }
+        return delta;
+    }
+
+    // ΔH（RowVector）を与えて各サブキャリアの γ_k を返す。
+    // - DeltaH_row: ΔH = H_est - H_true の行ベクトル（l に対応）
+    // - l: 時刻/フレームインデックス（H_true_ の行を使う）
+    // - noiseSD: シミュレータの真の雑音標準偏差
+    // - Px: 送信シンボル平均電力（デフォルト 1.0）
+    // - beta_override: β を明示したい場合は正値を渡す（負なら noiseSD から計算）
+    // - returnPerSubcarrier: true->K要素のベクトル、false->スカラー平均（1要素ベクトル）
+    Eigen::VectorXd computeGammaFromDeltaH(const Eigen::RowVectorXcd &DeltaH_row,
+                                           int l,
+                                           double noiseSD,
+                                           double Px = 1.0,
+                                           double beta_override = -1.0,
+                                           bool returnPerSubcarrier = true) const
+    {
+        if (DeltaH_row.size() != params_.K_) {
+            throw std::invalid_argument("DeltaH_row size does not match params_.K_");
+        }
+        if (l < 0 || l >= params_.L_) {
+            throw std::out_of_range("l is out of range");
+        }
+
+        double beta = (beta_override > 0.0) ? beta_override : 1.0 / (noiseSD * noiseSD);
+        const double eps = 1e-12;
+        Eigen::VectorXd gamma(params_.K_);
+
+        for (int k = 0; k < params_.K_; ++k) {
+            double H_abs_sq = std::norm(H_true_(l, k));           // |H_k|^2
+            if (H_abs_sq < 1e-20) { // ゼロ除算回避: 非現実的に小さい場合は 0 を返す
+                gamma(k) = 0.0;
+                continue;
+            }
+            double DH_abs_sq = std::norm(DeltaH_row(k));         // |ΔH_k|^2
+            double cross_abs_sq = std::norm(DeltaH_row(k) * H_true_(l, k)); // |ΔH_k * H_k|^2
+            double plas_abs_sq = std::norm(H_true_(l, k) + DeltaH_row(k)); // |H_k + ΔH_k|^2
+
+            // 式(74) の形に合わせた実装（分子/分母の形を反映）
+            double numerator = H_abs_sq * H_abs_sq * Px * beta; // |H_k|^4 * P_x * β
+            double denominator = cross_abs_sq * Px * beta       // |ΔH_k * H_k|^2 * P_x * β
+                                 + plas_abs_sq                 // + |H_k + ΔH_k|^2
+                                 + eps;                        // 数値安定化
+
+            gamma(k) = numerator / denominator;
+        }
+
+        if (!returnPerSubcarrier) {
+            Eigen::VectorXd out(1);
+            out(0) = gamma.mean();
+            return out;
+        }
+
+        Eigen::VectorXd gamma_dB = 10.0 * gamma.array().log10();
+        
+        return gamma_dB;
+    }
+
+    Eigen::VectorXd computeGamma_78(int l,
+                                    double noiseSD,
+                                    double Px = 1.0,
+                                    double beta_override = -1.0,
+                                    bool returnPerSubcarrier = true) const
+    {
+        if (l < 0 || l >= params_.L_) {
+            throw std::out_of_range("l is out of range");
+        }
+
+        double beta = (beta_override > 0.0) ? beta_override : 1.0 / (noiseSD * noiseSD);
+        const double eps = 1e-12;
+        Eigen::VectorXd gamma(params_.K_);
+
+        for (int k = 0; k < params_.K_; ++k) {
+            double H_abs_sq = std::norm(H_true_(l, k));           // |H_k|^2
+            if (H_abs_sq < 1e-20) { // ゼロ除算回避: 非現実的に小さい場合は 0 を返す
+                gamma(k) = 0.0;
+                continue;
+            }
+
+            // 式(74) の形に合わせた実装（分子/分母の形を反映）
+            double numerator = H_abs_sq * Px * beta + 1; // |H_k|^4 * P_x * β
+           
+            gamma(k) = numerator;
+        }
+
+        if (!returnPerSubcarrier) {
+            Eigen::VectorXd out(1);
+            out(0) = gamma.mean();
+            return out;
+        }
+
+        Eigen::VectorXd gamma_dB = 10.0 * gamma.array().log10();
+        
+        return gamma_dB;
     }
 
 private:
