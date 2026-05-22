@@ -173,6 +173,14 @@ public:
         // std::cout << "OK6" << std::endl;
     }
 
+    void est_H_by_RaghavendraAIC(){
+        Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
+    }
+
     // 真のモデルと既知の雑音分散を使って、パイロットからML推定を行う
     void est_H_by_known_model_and_noise(double knownNoiseVariance)
     {
@@ -211,6 +219,23 @@ public:
         }
 
         noiseVariance_ = knownNoiseVariance;
+    }
+
+    // 16パスあると仮定してパイロットシンボルからインパルス応答をML推定する
+    void est_H_by_16paths()
+    {
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+
+        Eigen::VectorXcd h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
     }
 
     // パイロットシンボルから直接Hを推定する
@@ -1018,6 +1043,56 @@ private:
         // 6. パラメータ更新
         this->noiseVariance_ = 1.0 / beta_list[best_idx];
         // std::cout << "h_l >> " << h_l << std::endl;
+    }
+
+    // パイロットシンボルからRaghavendraAICを用いての初期値を得る
+    Eigen::RowVectorXcd set_initial_params_by_RaghavendraAIC()
+    {
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * (W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose());
+
+        int P = params_.Q_ - 1; // 全パス数
+        Eigen::VectorXcd current_R = Y_avg.transpose();
+        std::vector<int> min_idx_list; // 各ループで除外するパスのインデックスを保存
+
+        while (P >= 0) {
+            std::vector<double> GAIC_list(P + 1);
+            for(int i = 0; i <= P; i++){
+                Eigen::VectorXcd h_active = Eigen::VectorXcd::Zero(params_.Q_);
+                for(int t = 0; t <= i; t++){
+                    h_active(t) = h_l(t);
+                } ;
+                double sigma_est = ((current_R - X_l * W_est_ * h_active).squaredNorm()) / (double)params_.K_;
+                double V_l = (params_.K_ * std::log(sigma_est)) / 2.0;
+                GAIC_list[i] = V_l + 2 * std::log(std::log(params_.K_)) * (i + 2); // i + 1 が論文中のLに相当
+            }
+            int min_idx = std::distance(GAIC_list.begin(), std::min_element(GAIC_list.begin(), GAIC_list.end()));
+            min_idx_list.push_back(min_idx);
+            current_R = current_R - X_l * W_est_.col(min_idx) * h_l(min_idx); // 除外したパスの影響を減算
+            P = min_idx - 1; // 次のループでは除外したパス以降を評価
+        }
+
+        // 抽出されたタップのインデックスを昇順にソートする
+        // （順番がバラバラだと行列の列順が変わってしまうため、元通りに並べ直す）
+        std::sort(min_idx_list.begin(), min_idx_list.end());
+
+        int num_active_taps = min_idx_list.size();
+
+        // 有効タップのみを抜き出した縮小DFT行列 W_tilde の作成
+        // W_tilde は (K × num_active_taps) のサイズになります
+        Eigen::MatrixXcd W_tilde(params_.K_, num_active_taps);
+        for (int j = 0; j < num_active_taps; ++j) {
+            W_tilde.col(j) = W_est_.col(min_idx_list[j]); // 該当する列だけをコピー
+        }
+
+        // 3. 論文の式(11)に基づく、最終的な改良最小二乗推定 (Improved LS)
+        // h_ils は (num_active_taps × 1) のベクトルになります
+        Eigen::VectorXcd h_ils = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * (W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose());
+
+        return (W_tilde * h_ils).transpose();
     }
 
     void equalizeChannelWithPilot()

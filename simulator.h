@@ -436,6 +436,52 @@ public:
     }
 
     /**
+     * パスモデルがわからないが16パスあると仮定してインパルス応答を推定する方法の H のMSE を計算する
+     * @return 周波数応答HのMSE
+     */
+    double get_H_MSE_with_16paths_during_pilot()
+    {
+        double total_H_squared_error = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            transceiver_.est_H_by_16paths();
+
+            total_H_squared_error += transceiver_.getMSE_during_pilot();
+        }
+
+        double H_mse = total_H_squared_error / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+        return H_mse;
+    }
+
+    /**
+     * Raghavendraの論文で提案されているAICでモデル選択をした場合の推定
+     * @return 周波数応答HのMSE
+     */
+    double get_H_MSE_with_RaghavendraAIC_during_pilot()
+    {
+        double total_H_squared_error = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            transceiver_.est_H_by_RaghavendraAIC();
+
+            total_H_squared_error += transceiver_.getMSE_during_pilot();
+        }
+
+        double H_mse = total_H_squared_error / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+        return H_mse;
+    }
+
+    /**
      * 真のパスモデルと既知の雑音分散を使った ML 推定の H のMSE をフレーム先頭 (l=0) のみで計算する
      * @return 周波数応答HのMSE (l=0)
      */

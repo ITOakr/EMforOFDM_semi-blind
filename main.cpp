@@ -121,6 +121,9 @@ int main()
 	std::cout << "33: Known-model, known-noise ML validation (H MSE at l=0 vs Eb/N0)" << std::endl;
 	std::cout << "34: Instantaneous SNR (gamma) mean vs Eb/N0 at (l,k)=(0,0)" << std::endl;
 	std::cout << "35: Instantaneous SNR (gamma) vs Eb/N0 at (l,k)=(0,0)" << std::endl;
+	std::cout << "36: Instantaneous SNR (gamma) vs Doppler at (l,k)=(0,0)" << std::endl;
+	std::cout << "37: MSE of h 16 paths by initial h estimation vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "38: MSE of Pilot Raghavendra AIC h vs Eb/N0 sweep (fixed Doppler)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -1032,6 +1035,51 @@ int main()
 			ofs << EbN0dB << "," << gamma_mean << std::endl;
 		}
 	}
+	else if (mode_select == 37)
+	{
+		// --- モード37: 16パスあると仮定してインパルス応答を推定 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_16Paths_HMSE_vs_EbN0.csv";
+		ofs.open(fileName);
+		ofs << "EbN0dB,H_MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double H_mse = sim.get_H_MSE_with_16paths_during_pilot();
+
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", H_MSE = " << H_mse << std::endl;
+			ofs << EbN0dB << "," << H_mse << std::endl;
+		}
+	}
+	else if (mode_select == 38)
+	{
+		// --- モード38: Raghavendraの提案するAICによるモデル選択 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_RaghavendraAIC_MSE_vs_EbN0.csv";
+		ofs.open(fileName);
+		ofs << "EbN0dB,H_MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double H_mse = sim.get_H_MSE_with_RaghavendraAIC_during_pilot();
+
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", H_MSE = " << H_mse << std::endl;
+			ofs << EbN0dB << "," << H_mse << std::endl;
+		}
+	}
+
 	else
 	{
 		std::cout << "Invalid mode selected." << std::endl;
