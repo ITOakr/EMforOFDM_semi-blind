@@ -174,7 +174,7 @@ public:
     }
 
     void est_H_by_RaghavendraAIC(){
-        Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC();
+        Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC_Update();
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
         {
             H_est_.row(l) = H_init;
@@ -229,7 +229,9 @@ public:
 
         X_l = X_avg.asDiagonal();
 
-        Eigen::VectorXcd h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
+        std::cout << "X_l=" << X_l.diagonal().transpose() << std::endl;
+
+        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
 
         Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
@@ -1042,7 +1044,6 @@ private:
 
         // 6. パラメータ更新
         this->noiseVariance_ = 1.0 / beta_list[best_idx];
-        // std::cout << "h_l >> " << h_l << std::endl;
     }
 
     // パイロットシンボルからRaghavendraAICを用いての初期値を得る
@@ -1090,6 +1091,58 @@ private:
 
         // 3. 論文の式(11)に基づく、最終的な改良最小二乗推定 (Improved LS)
         // h_ils は (num_active_taps × 1) のベクトルになります
+        Eigen::VectorXcd h_ils = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * (W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose());
+
+        return (W_tilde * h_ils).transpose();
+    }
+
+    // パイロットシンボルからRaghavendraAICを用いての初期値を得る (反復更新版)
+    Eigen::RowVectorXcd set_initial_params_by_RaghavendraAIC_Update()
+    {
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+        // 初期のフルLS推定
+        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * (W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose());
+
+        int P = params_.Q_ - 1; 
+        Eigen::VectorXcd current_R = Y_avg.transpose();
+        std::vector<int> selected_taps; 
+
+        while (P >= 0) {
+            std::vector<double> GAIC_list(P + 1);
+            for(int i = 0; i <= P; i++){
+                Eigen::VectorXcd h_temp = Eigen::VectorXcd::Zero(params_.Q_);
+                for(int t = 0; t <= i; t++){
+                    h_temp(t) = h_l(t);
+                }
+                double sigma_est = ((current_R - X_l * W_est_ * h_temp).squaredNorm()) / (double)params_.K_;
+                double V_l = (params_.K_ * std::log(sigma_est + 1e-12)) / 2.0; // 0除算防止
+                GAIC_list[i] = V_l + 2.0 * std::log(std::log(params_.K_)) * (i + 1); 
+            }
+            int best_L = std::distance(GAIC_list.begin(), std::min_element(GAIC_list.begin(), GAIC_list.end()));
+            selected_taps.push_back(best_L);
+
+            // 確定したパスの影響を現在の受信信号から減算
+            current_R = current_R - X_l * W_est_.col(best_L) * h_l(best_L); 
+            
+            // 残りのパス (0 から best_L - 1) について、最新の current_R を用いて推定値を更新
+            P = best_L - 1; 
+            if (P >= 0) {
+                Eigen::MatrixXcd W_rem = W_est_.leftCols(P + 1);
+                h_l.head(P + 1) = (W_rem.adjoint() * X_l.adjoint() * X_l * W_rem).inverse() * (W_rem.adjoint() * X_l.adjoint() * current_R);
+            }
+        }
+
+        std::sort(selected_taps.begin(), selected_taps.end());
+        int num_active_taps = selected_taps.size();
+
+        Eigen::MatrixXcd W_tilde(params_.K_, num_active_taps);
+        for (int j = 0; j < num_active_taps; ++j) {
+            W_tilde.col(j) = W_est_.col(selected_taps[j]);
+        }
+
         Eigen::VectorXcd h_ils = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * (W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose());
 
         return (W_tilde * h_ils).transpose();

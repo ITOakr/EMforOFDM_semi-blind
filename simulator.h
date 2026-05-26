@@ -936,6 +936,60 @@ void saveAverageImpulseResponseByQ(int target_l, const std::string& filename)
 }
 
 /**
+ * [Mode 39] 16パス推定時の平均インパルス応答電力 (l=0) を横軸 q で出力
+ */
+void saveAverageEstimatedImpulseResponseByQ_16paths(const std::string& filename)
+{
+    // 各パスの推定電力を蓄積するベクトル
+    std::vector<double> avg_power_q(params_.Q_, 0.0);
+
+    std::cout << "Calculating average ESTIMATED impulse response (16 paths) over " << NUMBER_OF_TRIAL << " trials..." << std::endl;
+
+    for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+    {
+        transceiver_.setX_();
+        channel_.generateFrequencyResponse(fd_Ts_);
+        transceiver_.setY_(channel_.getH(), noiseSD_);
+
+        // 16パス推定を実行 (パイロット区間 l=0, 1 を使用)
+        transceiver_.est_H_by_16paths();
+
+        // 推定されたパス係数ベクトルを取得
+        Eigen::VectorXcd h_est = transceiver_.getEstimatedPathCoefficients();
+
+        for (int q = 0; q < params_.Q_; q++)
+        {
+            // 推定値の電力を加算
+            double power = std::norm(h_est(q)); 
+            avg_power_q[q] += power;
+        }
+
+        // 進捗表示
+        if (NUMBER_OF_TRIAL >= 10 && ((tri + 1) % (NUMBER_OF_TRIAL / 10) == 0)) {
+            std::cout << "\rProgress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+        }
+    }
+    std::cout << std::endl;
+
+    // CSVファイルへ出力
+    std::ofstream ofs(filename);
+    if (!ofs) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        return;
+    }
+    ofs << "q,AveragePower,AverageMagnitude,Power_dB" << std::endl;
+
+    for (int q = 0; q < params_.Q_; q++)
+    {
+        double mean_power = avg_power_q[q] / (double)NUMBER_OF_TRIAL;
+        double mean_magnitude = std::sqrt(mean_power);
+        double power_db = 10.0 * std::log10(mean_power + 1e-20);
+
+        ofs << q << "," << mean_power << "," << mean_magnitude << "," << power_db << std::endl;
+    }
+    ofs.close();
+}
+/**
  * [Mode 28] パイロット区間 (l=0) における推定インパルス応答の保存
  */
 void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
@@ -1082,6 +1136,33 @@ void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
         
         // 試行回数とパス数(Q)で平均化
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.Q_);
+    }
+
+    /**
+     * @brief 各試行でランダムなパス構成を生成し、平均MSEを計算する (Mode 40用)
+     * @return 平均MSE
+     */
+    double getMSE_RandomPath_Mode12_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed); // 0 or 1 を生成
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            // ランダムなパス構成でチャネルを生成
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 推定（Mode 12ベース: AICによる初期推定）
+            transceiver_.est_H_by_initial_h();
+
+            // MSEの累積（パイロット区間のMSEを使用）
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
     }
 
 private:

@@ -124,6 +124,8 @@ int main()
 	std::cout << "36: Instantaneous SNR (gamma) vs Doppler at (l,k)=(0,0)" << std::endl;
 	std::cout << "37: MSE of h 16 paths by initial h estimation vs Eb/N0 sweep (fixed Doppler)" << std::endl;
 	std::cout << "38: MSE of Pilot Raghavendra AIC h vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "39: MSE of Pilot Raghavendra AIC H vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "40: MSE of Random Path Model AIC vs Eb/N0 sweep (fixed Doppler)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -1078,6 +1080,56 @@ int main()
 			std::cout << "EbN0dB = " << EbN0dB << ", H_MSE = " << H_mse << std::endl;
 			ofs << EbN0dB << "," << H_mse << std::endl;
 		}
+	}
+	else if (mode_select == 39)
+	{
+		// --- モード39: 16パス推定時の平均インパルス応答電力 (l=0) ---
+		double inputDoppler;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> inputDoppler;
+		sim.setDopplerFrequency(inputDoppler);
+
+		int fixedEbN0dB;
+		std::cout << "Enter fixed Eb/N0 [dB]:";
+		std::cin >> fixedEbN0dB;
+		sim.setNoiseSD(fixedEbN0dB);
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_EbN0_" + std::to_string(fixedEbN0dB) + "_16Paths_AverageImpulseResp_q.csv";
+		
+		std::cout << "Exporting Average Estimated Impulse Response Power (16 paths, l=0)..." << std::endl;
+		sim.saveAverageEstimatedImpulseResponseByQ_16paths(fileName);
+		
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 40)
+	{
+		// --- モード40: ランダムパスモデルによる平均MSE (Mode 12ベース) ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_RandomPath_MSE_MODE40.csv";
+		ofs.open(fileName);
+
+		std::cout << "Starting Random Path MSE Simulation (Mode 40)..." << std::endl;
+		std::cout << "Eb/N0 [dB], MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double mse = sim.getMSE_RandomPath_Mode12_Simulation();
+
+			std::cout << EbN0dB << ", " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
+
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
 	}
 
 	else
