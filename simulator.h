@@ -23,8 +23,8 @@ public:
     Simulator(const SimulationParameters &params)
         : params_(params),
         W_master_(SimulationParameters::generateW(params.K_, params.Q_, params.NUMBER_OF_FFT)),
-        channel_(params, W_master_),
-        transceiver_(params, W_master_)
+        channel_(params_, W_master_),
+        transceiver_(params_, W_master_)
     {
     }
 
@@ -1163,6 +1163,297 @@ void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
         }
         // 平均化
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * Mode 42: ランダムパスモデルによる平均MSE (Raghavendra AIC を全探索で適用)
+     */
+    double getMSE_RandomPath_RaghavendraAIC_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed); // 0 or 1 を生成
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            // ランダムなパス構成でチャネルを生成
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // Raghavendra AIC による初期推定
+            transceiver_.est_H_by_RaghavendraAIC();
+
+            // MSE の蓄積（パイロット区間の平均を使う）
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * Mode 42: ランダムパスモデルによる平均MSE (Raghavendra AIC を全探索で適用)
+     */
+    double getMSE_RandomPath_RaghavendraAIC_Simulation2()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed); // 0 or 1 を生成
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            // ランダムなパス構成でチャネルを生成
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // Raghavendra AIC による初期推定
+            transceiver_.est_H_by_RaghavendraAIC2();
+
+            // MSE の蓄積（パイロット区間の平均を使う）
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * ステップ 2: AIC 8パス総当たりによるモデル選択正答率のシミュレーション
+     * @return 正答率 (0.0 ~ 1.0)
+     */
+    double getExhaustiveAICAccuracy_8paths_Simulation()
+    {
+        int successCount = 0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed);
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            // 1. チャネル生成の制限: インデックス 0〜7 のみランダム、8〜15 は常に 0 に固定
+            std::vector<int> true_mask_8(8);
+            bool all_zero = true;
+            for (int q = 0; q < params_.Q_; q++) {
+                if (q < 8) {
+                    int val = dist();
+                    params_.pathMask[q] = val;
+                    true_mask_8[q] = val;
+                    if (val == 1) all_zero = false;
+                } else {
+                    params_.pathMask[q] = 0;
+                }
+            }
+
+            // 総当たり探索は i=1 から開始するため、真のモデルも少なくとも1つのパスを持つ必要がある
+            if (all_zero) {
+                int force_idx = tri % 8; // 決定的に1つ選ぶ
+                params_.pathMask[force_idx] = 1;
+                true_mask_8[force_idx] = 1;
+            }
+
+            // 2. プロファイル更新と信号生成
+            channel_.updateProfile();
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 3. 総当たり探索の実行 (Step 1 で実装したメソッド)
+            std::vector<int> est_mask_8 = transceiver_.findBestMaskByExhaustiveAIC_8paths();
+
+            // 4. 正解判定: 最初の8要素が完全に一致するか
+            if (est_mask_8 == true_mask_8) {
+                successCount++;
+            }
+
+            // 進捗表示 (10%ごと)
+            if (NUMBER_OF_TRIAL >= 10 && (tri + 1) % (NUMBER_OF_TRIAL / 10) == 0) {
+                std::cout << "\rExhaustive AIC Simulation Progress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+            }
+        }
+        std::cout << std::endl;
+
+        return (double)successCount / (double)NUMBER_OF_TRIAL;
+    }
+
+    /**
+     * ステップ 2: AIC 8パス総当たりによるモデル選択後のインパルス応答推定MSEシミュレーション (固定パス用)
+     * @return 平均MSE
+     */
+    double getMSE_ExhaustiveAIC_8paths_fixedMask_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        
+        // 1. パスの固定（parameters.h のマスクをそのまま使用）
+        channel_.updateProfile();
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            // 2. 信号生成
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 3. 総当たり探索の実行 (最初の8パスがマックス)
+            std::vector<int> best_mask_8 = transceiver_.findBestMaskByExhaustiveAIC_8paths();
+
+            // 4. Qサイズ(16)のフルマスクへ展開
+            std::vector<int> full_mask(params_.Q_, 0);
+            for (int q = 0; q < 8; ++q) full_mask[q] = best_mask_8[q];
+
+            // 5. 選択されたマスクを用いて推定実行
+            transceiver_.est_H_by_given_mask(full_mask);
+
+            // 6. MSEの累積
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+
+            // 進捗表示 (10%ごと)
+            if (NUMBER_OF_TRIAL >= 10 && (tri + 1) % (NUMBER_OF_TRIAL / 10) == 0) {
+                std::cout << "\rExhaustive AIC MSE Progress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+            }
+        }
+        std::cout << std::endl;
+
+        // 平均化: 試行回数とサブキャリア数
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * ステップ 2 (Raghavendra版): Raghavendra AIC 8パス総当たりによるモデル選択後のインパルス応答推定MSEシミュレーション (固定パス用)
+     * @return 平均MSE
+     */
+    double getMSE_ExhaustiveRaghavendraAIC_8paths_fixedMask_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        
+        // 1. パスの固定（parameters.h のマスクをそのまま使用）
+        channel_.updateProfile();
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            // 2. 信号生成
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 3. 総当たり探索の実行 (Raghavendra版)
+            std::vector<int> best_mask_8 = transceiver_.findBestMaskByExhaustiveRaghavendraAIC_8paths();
+
+            // 4. Qサイズ(16)のフルマスクへ展開
+            std::vector<int> full_mask(params_.Q_, 0);
+            for (int q = 0; q < 8; ++q) full_mask[q] = best_mask_8[q];
+
+            // 5. 選択されたマスクを用いて推定実行
+            transceiver_.est_H_by_given_mask(full_mask);
+
+            // 6. MSEの累積
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+
+            // 進捗表示 (10%ごと)
+            if (NUMBER_OF_TRIAL >= 10 && (tri + 1) % (NUMBER_OF_TRIAL / 10) == 0) {
+                std::cout << "\rExhaustive Raghavendra AIC MSE Progress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+            }
+        }
+        std::cout << std::endl;
+
+        // 平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * Mode 46: ランダムパスモデルによる平均MSE (真のパスマスクが既知として推定)
+     */
+    double getMSE_RandomPath_KnownMask_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed); // 0 or 1 を生成
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            // ランダムなパス構成でチャネルを生成
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 真の遅延プロファイルからマスク（パスの有無）を抽出
+            std::vector<int> true_mask(params_.Q_, 0);
+            const Eigen::VectorXd& xi = channel_.getXi();
+            for (int q = 0; q < params_.Q_; q++) {
+                if (xi(q) > 0.0) {
+                    true_mask[q] = 1;
+                }
+            }
+
+            // 既知のマスクを用いて推定を実行
+            transceiver_.est_H_by_given_mask(true_mask);
+
+            // MSE の蓄積（パイロット区間の平均を使う）
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * @brief Mode 47: AIC vs Raghavendra GAIC の単一試行評価
+     * @return pair<vector<double>, vector<double>> {aic_values, gaic_values}
+     */
+    std::pair<std::vector<double>, std::vector<double>> getAICvsQ_SingleTrial_Simulation(double fd_Ts, double EbN0dB)
+    {
+        setDopplerFrequency(fd_Ts);
+        setNoiseSD(EbN0dB);
+
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed);
+
+        transceiver_.setX_();
+        channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+        transceiver_.setY_(channel_.getH(), noiseSD_);
+
+        return transceiver_.calculateAICvsQ();
+    }
+
+    /**
+     * @brief Mode 48: AIC vs Raghavendra GAIC の複数回平均評価
+     * @return pair<vector<double>, vector<double>> {average_aic_values, average_gaic_values}
+     */
+    std::pair<std::vector<double>, std::vector<double>> getAICvsQ_Average_Simulation(double fd_Ts, double EbN0dB)
+    {
+        setDopplerFrequency(fd_Ts);
+        setNoiseSD(EbN0dB);
+
+        std::vector<double> sum_aic(params_.Q_, 0.0);
+        std::vector<double> sum_gaic(params_.Q_, 0.0);
+
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed);
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            auto [aic, gaic] = transceiver_.calculateAICvsQ();
+            for (int q = 0; q < params_.Q_; ++q) {
+                sum_aic[q] += aic[q];
+                sum_gaic[q] += gaic[q];
+            }
+
+            // 進捗表示
+            if (NUMBER_OF_TRIAL >= 10 && (tri + 1) % (NUMBER_OF_TRIAL / 10) == 0) {
+                std::cout << "\rAIC vs GAIC Simulation Progress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+            }
+        }
+        std::cout << std::endl;
+
+        std::vector<double> avg_aic(params_.Q_);
+        std::vector<double> avg_gaic(params_.Q_);
+        for (int q = 0; q < params_.Q_; ++q) {
+            avg_aic[q] = sum_aic[q] / (double)NUMBER_OF_TRIAL;
+            avg_gaic[q] = sum_gaic[q] / (double)NUMBER_OF_TRIAL;
+        }
+
+        return {avg_aic, avg_gaic};
     }
 
 private:

@@ -181,6 +181,14 @@ public:
         }
     }
 
+    void est_H_by_RaghavendraAIC2(){
+        Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC_Update2();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
+    }
+
     // 真のモデルと既知の雑音分散を使って、パイロットからML推定を行う
     void est_H_by_known_model_and_noise(double knownNoiseVariance)
     {
@@ -252,6 +260,52 @@ public:
     }
 
     /**
+     * 指定されたマスクを用いてインパルス応答を推定し、周波数応答を保存する (Mode 43用)
+     * @param mask 使用するパスマスク (サイズ Q_ の int ベクトル)
+     */
+    void est_H_by_given_mask(const std::vector<int>& mask)
+    {
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        X_l = X_avg.asDiagonal();
+
+        std::vector<int> active_indices;
+        for (int q = 0; q < mask.size(); ++q) {
+            if (mask[q] == 1) active_indices.push_back(q);
+        }
+
+        int Q_tilde = active_indices.size();
+        if (Q_tilde == 0) {
+            h_l = Eigen::VectorXcd::Zero(params_.Q_);
+            for (int l = 0; l < params_.NUMBER_OF_PILOT; l++) {
+                H_est_.row(l).setZero();
+            }
+            return;
+        }
+
+        Eigen::MatrixXcd W_tilde(params_.K_, Q_tilde);
+        for (int i = 0; i < Q_tilde; ++i) {
+            W_tilde.col(i) = W_est_.col(active_indices[i]);
+        }
+
+        // LS推定
+        Eigen::VectorXcd h_active = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+        // フルベクトルへ展開
+        this->h_l = Eigen::VectorXcd::Zero(params_.Q_);
+        for (int i = 0; i < Q_tilde; ++i) {
+            this->h_l(active_indices[i]) = h_active(i);
+        }
+
+        // 周波数応答へ変換
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
+    }
+
+    /**
      * AICで選択されたパスモデル（マスク）を取得する
      * @return サイズQのベクトル (1:パスあり, 0:パスなし)
      */
@@ -267,6 +321,177 @@ public:
             }
         }
         return mask;
+    }
+
+    /**
+     * ステップ 1: AIC 8パス総当たりによる最良マスクの探索
+     * @return 8要素のマスクベクトル (1:あり, 0:なし)
+     */
+    std::vector<int> findBestMaskByExhaustiveAIC_8paths()
+    {
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        X_l = X_avg.asDiagonal();
+
+        double min_aic = 1e18; // 十分大きな値
+        int best_mask_int = 0;
+
+        for (int i = 1; i < 256; ++i) {
+            std::vector<int> active_indices;
+            for (int bit = 0; bit < 8; ++bit) {
+                if ((i >> bit) & 1) {
+                    active_indices.push_back(bit);
+                }
+            }
+            int Q_active = static_cast<int>(active_indices.size());
+
+            // 指定されたマスクでの DFT 部分行列の作成
+            Eigen::MatrixXcd W_active(params_.K_, Q_active);
+            for (int j = 0; j < Q_active; ++j) {
+                W_active.col(j) = W_est_.col(active_indices[j]);
+            }
+
+            // LS推定 (Mode 12準拠)
+            Eigen::VectorXcd h_active = (W_active.adjoint() * X_l.adjoint() * X_l * W_active).inverse() * W_active.adjoint() * X_l.adjoint() * Y_avg.transpose();
+            
+            // 残差電力計算
+            double residual = (Y_avg.transpose() - X_l * W_active * h_active).squaredNorm();
+
+            // AIC算出 (Mode 12 完全準拠)
+            double beta = (double)params_.K_ / residual;
+            double logL = params_.K_ * std::log(beta) - params_.K_ * std::log(M_PI) - params_.K_;
+            double aic = -2.0 * (logL - 2.0 * Q_active);
+
+            if (aic < min_aic) {
+                min_aic = aic;
+                best_mask_int = i;
+            }
+        }
+
+        // 最良のマスクをベクトルに変換して返す
+        std::vector<int> result(8, 0);
+        for (int bit = 0; bit < 8; ++bit) {
+            if ((best_mask_int >> bit) & 1) {
+                result[bit] = 1;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * ステップ 1 (Raghavendra版): Raghavendra AIC 8パス総当たりによる最良マスクの探索
+     * @return 8要素のマスクベクトル (1:あり, 0:なし)
+     */
+    std::vector<int> findBestMaskByExhaustiveRaghavendraAIC_8paths()
+    {
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        X_l = X_avg.asDiagonal();
+
+        double min_gaic = 1e300;
+        int best_mask_int = 0;
+
+        for (int i = 1; i < 256; ++i) {
+            std::vector<int> active_indices;
+            for (int bit = 0; bit < 8; ++bit) {
+                if ((i >> bit) & 1) active_indices.push_back(bit);
+            }
+            int Q_active = static_cast<int>(active_indices.size());
+
+            Eigen::MatrixXcd W_active(params_.K_, Q_active);
+            for (int j = 0; j < Q_active; ++j) W_active.col(j) = W_est_.col(active_indices[j]);
+
+            Eigen::VectorXcd h_active = (W_active.adjoint() * X_l.adjoint() * X_l * W_active).inverse() * W_active.adjoint() * X_l.adjoint() * Y_avg.transpose();
+            
+            double residual = (Y_avg.transpose() - X_l * W_active * h_active).squaredNorm();
+            double sigma_est_sq = residual / (double)params_.K_;
+
+            // Raghavendra GAIC 計算式
+            double V_l = (double)params_.K_ * std::log(sigma_est_sq + 1e-18) / 2.0;
+            double penalty = 2.0 * std::log(std::log((double)params_.K_ + 1e-12)) * ((double)Q_active + 1);
+            double gaic = V_l + penalty;
+
+            if (gaic < min_gaic) {
+                min_gaic = gaic;
+                best_mask_int = i;
+            }
+        }
+
+        std::vector<int> result(8, 0);
+        for (int bit = 0; bit < 8; ++bit) {
+            if ((best_mask_int >> bit) & 1) result[bit] = 1;
+        }
+        return result;
+    }
+
+    /**
+     * Exhaustive search (全探索) を用いて Raghavendra の GAIC を評価し、
+     * 最良マスクを求めて h_l と noiseVariance_ を設定する。
+     * このメソッドは16パスすべてを対象に総当たり評価を行います。
+     * つかわないかも
+     */
+    void set_initial_params_by_exhaustive_RaghavendraAIC()
+    {
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+
+        double min_gaic = 1e300;
+        int best_mask_int = 0;
+        double best_sigma_est = 0.0;
+        Eigen::VectorXcd best_h_active;
+
+        // 総当たり: 1 から (2^Q - 1)
+        const int max_mask = (1 << params_.Q_) - 1;
+        for (int mask = 1; mask <= max_mask; ++mask) {
+            std::vector<int> active_indices;
+            for (int bit = 0; bit < params_.Q_; ++bit) {
+                if ((mask >> bit) & 1) active_indices.push_back(bit);
+            }
+
+            int Q_active = static_cast<int>(active_indices.size());
+            if (Q_active == 0) continue;
+
+            // 部分行列 W_active の作成
+            Eigen::MatrixXcd W_active(params_.K_, Q_active);
+            for (int j = 0; j < Q_active; ++j) W_active.col(j) = W_est_.col(active_indices[j]);
+
+            // 最小二乗推定
+            Eigen::VectorXcd h_active;
+            // 数値的不安定対策: 正則化は必要なら追加可能
+            h_active = (W_active.adjoint() * X_l.adjoint() * X_l * W_active).inverse() * W_active.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+            double residual = (Y_avg.transpose() - X_l * W_active * h_active).squaredNorm();
+            double sigma_est = residual / (double)params_.K_;
+
+            // Raghavendra の GAIC 相当の評価値
+            double V_l = (double)params_.K_ * std::log(sigma_est + 1e-18) / 2.0; // 0除算回避
+            double penalty = 2.0 * std::log(std::log((double)params_.K_ + 1e-12));
+            double gaic = V_l + penalty * ((double)Q_active + 1);
+
+            if (gaic < min_gaic) {
+                min_gaic = gaic;
+                best_mask_int = mask;
+                best_sigma_est = sigma_est;
+                best_h_active = h_active;
+            }
+        }
+
+        // best_mask を h_l フルサイズに展開
+        this->h_l = Eigen::VectorXcd::Zero(params_.Q_);
+        if (best_mask_int != 0) {
+            int idx = 0;
+            for (int bit = 0; bit < params_.Q_; ++bit) {
+                if ((best_mask_int >> bit) & 1) {
+                    this->h_l(bit) = best_h_active(idx);
+                    idx++;
+                }
+            }
+        }
+
+        // 推定雑音分散は sigma_est
+        this->noiseVariance_ = best_sigma_est;
     }
 
     // Wrapper法によるAICモデル選択付き等化
@@ -875,6 +1100,64 @@ public:
         return gamma_dB;
     }
 
+    /**
+     * @brief 仮定するパス数 q = 1 ... Q_ に対する通常AICおよびRaghavendra GAICを計算する
+     * @return pair<vector<double>, vector<double>> {aic_values, gaic_values}
+     */
+    std::pair<std::vector<double>, std::vector<double>> calculateAICvsQ()
+    {
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        X_l = X_avg.asDiagonal();
+
+        // まずフルモデルでのLS推定を行う（パス電力のランキングを作成するため）
+        Eigen::VectorXcd h_full = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+        // パス電力の大きい順にソートする
+        std::vector<std::pair<double, int>> pathRank;
+        for (int q = 0; q < params_.Q_; ++q) {
+            pathRank.push_back({ std::norm(h_full(q)), q });
+        }
+        std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+
+        std::vector<double> aic_values(params_.Q_, 0.0);
+        std::vector<double> gaic_values(params_.Q_, 0.0);
+
+        for (int q = 1; q <= params_.Q_; ++q) {
+            // 上位 q 個のインデックスを取得してソート
+            std::vector<int> selected_indices;
+            for (int i = 0; i < q; ++i) {
+                selected_indices.push_back(pathRank[i].second);
+            }
+            std::sort(selected_indices.begin(), selected_indices.end());
+
+            // 部分DFT行列 W_tilde の作成
+            Eigen::MatrixXcd W_tilde(params_.K_, q);
+            for (int i = 0; i < q; ++i) {
+                W_tilde.col(i) = W_est_.col(selected_indices[i]);
+            }
+
+            // 部分モデルでのLS推定
+            Eigen::VectorXcd h_active = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose();
+            
+            // 残差平方和
+            double residual = (Y_avg.transpose() - X_l * W_tilde * h_active).squaredNorm();
+
+            // 1. 通常AICの計算
+            double beta = (double)params_.K_ / residual;
+            double logL = params_.K_ * std::log(beta) - params_.K_ * std::log(M_PI) - params_.K_;
+            aic_values[q - 1] = -2.0 * (logL - 2.0 * q);
+
+            // 2. Raghavendra GAICの計算
+            double sigma_est = residual / (double)params_.K_;
+            double V_l = (double)params_.K_ * std::log(sigma_est + 1e-18) / 2.0;
+            double penalty = 2.0 * std::log(std::log((double)params_.K_ + 1e-12)) * ((double)q + 1);
+            gaic_values[q - 1] = V_l + penalty;
+        }
+
+        return {aic_values, gaic_values};
+    }
+
 private:
     const SimulationParameters &params_;
     const Eigen::MatrixXcd &W_est_;
@@ -1133,6 +1416,62 @@ private:
                 Eigen::MatrixXcd W_rem = W_est_.leftCols(P + 1);
                 h_l.head(P + 1) = (W_rem.adjoint() * X_l.adjoint() * X_l * W_rem).inverse() * (W_rem.adjoint() * X_l.adjoint() * current_R);
             }
+        }
+
+        std::sort(selected_taps.begin(), selected_taps.end());
+        int num_active_taps = selected_taps.size();
+
+        Eigen::MatrixXcd W_tilde(params_.K_, num_active_taps);
+        for (int j = 0; j < num_active_taps; ++j) {
+            W_tilde.col(j) = W_est_.col(selected_taps[j]);
+        }
+
+        Eigen::VectorXcd h_ils = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * (W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose());
+
+        return (W_tilde * h_ils).transpose();
+    }
+
+        // パイロットシンボルからRaghavendraAICを用いての初期値を得る (反復更新版)
+    Eigen::RowVectorXcd set_initial_params_by_RaghavendraAIC_Update2()
+    {
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+        // 初期のフルLS推定
+        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+        int P = params_.Q_ - 1; 
+        Eigen::VectorXcd current_R = Y_avg.transpose();
+        std::vector<int> selected_taps; 
+
+        while (P >= 0) {
+            std::vector<double> GAIC_list(P + 1);
+            for(int i = 0; i <= P; i++){
+                // 1. W_est_ の左から L 列分だけを抽出（F_1 に相当）
+                Eigen::MatrixXcd W_L = W_est_.leftCols(i + 1);
+
+                // 2. 長さ L のチャネル推定値を一括計算 (式5 / 式14)
+                Eigen::VectorXcd h_L_est = (W_L.adjoint() * X_l.adjoint() * X_l * W_L).inverse() * (W_L.adjoint() * X_l.adjoint() * current_R);
+
+                // 3. 長さ Q_ のゼロベクトルを用意し、先頭 L 個に計算結果を入れる（0パディング）
+                Eigen::VectorXcd h_temp = Eigen::VectorXcd::Zero(params_.Q_);
+                h_temp.head(i + 1) = h_L_est;
+
+                double sigma_est = ((current_R - X_l * W_est_ * h_temp).squaredNorm()) / (double)params_.K_;
+                double V_l = (params_.K_ * std::log(sigma_est + 1e-12)) / 2.0; // 0除算防止
+                GAIC_list[i] = V_l + 2.0 * std::log(std::log(params_.K_)) * (i + 1); 
+            }
+            int best_L = std::distance(GAIC_list.begin(), std::min_element(GAIC_list.begin(), GAIC_list.end()));
+            selected_taps.push_back(best_L);
+
+            // 確定した有効タップ成分を削除                                                                                                                                                                         
+            h_l(best_L) = 0.0;                                                                                                                                                                                      
+                                                                                                                                                                                                                        
+            // 確定したパスの影響を現在の受信信号から減算                                                                                                                                                           
+            current_R = X_l * W_est_ * h_l;
+
+            P = best_L - 1;
         }
 
         std::sort(selected_taps.begin(), selected_taps.end());

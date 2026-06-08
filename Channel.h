@@ -96,6 +96,14 @@ public:
     // 遅延プロファイルのゲッター関数
     const Eigen::VectorXd& getXi() const { return xi_; }
 
+    /**
+     * @brief params_.pathMask に基づいて遅延プロファイルを更新する
+     */
+    void updateProfile()
+    {
+        setChannelProfile();
+    }
+
 private:
     const SimulationParameters &params_;
     const Eigen::MatrixXcd &W_;
