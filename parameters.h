@@ -3,7 +3,7 @@
 #include <cmath>
 #include <complex>
 #include <vector>
-#include <C:\Users\Akira Ito\eigen-3.4.0\Eigen\Dense>
+#include <Eigen/Dense>
 
 // シミュレーションのパラメータをまとめた構造体
 struct SimulationParameters

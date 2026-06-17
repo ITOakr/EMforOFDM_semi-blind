@@ -1,8 +1,8 @@
 #ifndef CHANNEL_H
 #define CHANNEL_H
 
-#include <C:\Users\Akira Ito\eigen-3.4.0\Eigen\Eigen>
-#include <C:\Users\Akira Ito\eigen-3.4.0\Eigen\Dense>
+#include <Eigen/Eigen>
+#include <Eigen/Dense>
 #include "parameters.h"
 #include "random_collection.h"
 

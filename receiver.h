@@ -1,27 +1,29 @@
-#ifndef TRANSCEIVER_H
-#define TRANSCEIVER_H
+#ifndef RECEIVER_H
+#define RECEIVER_H
 
-#include <stdexcept> // (ファイルの先頭に追加)
-#include <string>    // (エラーメッセージ構築のため)
-#include <C:\Users\Akira Ito\eigen-3.4.0\Eigen\Eigen>
-#include <C:\Users\Akira Ito\eigen-3.4.0\Eigen\Dense>
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include <complex>
+#include <algorithm>
+#include <iostream>
+#include <fstream>
+#include <limits>
+#include <Eigen/Dense>
 #include "parameters.h"
 #include "random_collection.h"
 #include "estimator_parameters.h"
 
-class Transceiver
+class Receiver
 {
 public:
-    Transceiver(const SimulationParameters &params, const Eigen::MatrixXcd &W) : params_(params), W_est_(W)
+    Receiver(const SimulationParameters &params, const Eigen::MatrixXcd &W) : params_(params), W_est_(W)
     {
-        EstimatorParameters est_params_;
         // リサイズ
         H_true_.resize(params_.L_, params_.K_);
         H_est_.resize(params_.L_, params_.K_);
-        txData_.resize(params_.L_, params_.K_);
         rxData_.resize(params_.L_, params_.K_);
         Y_.resize(params_.L_, params_.K_);
-        X_.resize(params_.L_, params_.K_);
         X_l.resize(params_.K_, params_.K_);
         R_.resize(params_.L_, params_.K_);
         symbol_.resize(params_.NUMBER_OF_SYMBOLS);
@@ -33,66 +35,40 @@ public:
 
         noiseVariance_ = 0.0;
 
-        unitIntUniformRand_.init(0, params_.NUMBER_OF_SYMBOLS - 1, params_.seed);
         unitCNormalRand_.init(0.0, 1.0 / sqrt(2.0), params_.seed);
 
         // グレイ符号のテーブルを作成
         setGrayNum();
         // シンボル設計とDFT行列設定
         setSymbol();
-        //setW_est_();
-    }
-
-    /**
-     * 送信信号生成
-     */
-    void setX_()
-    {
-        for (int l = 0; l < params_.L_; l++)
-        {
-            for (int k = 0; k < params_.K_; k++)
-            {
-                if (l < params_.NUMBER_OF_PILOT)
-                {
-                    txData_(l, k) = 0;
-                    X_(l, k) = params_.PILOT_SYMBOL_;
-                }
-                else
-                {
-                    txData_(l, k) = unitIntUniformRand_();
-                    X_(l, k) = symbol_(txData_(l, k));
-                }
-            }
-        }
     }
 
     /**
      * 受信信号生成
      */
-    void setY_(const Eigen::MatrixXcd& H, double noiseSD)
+    void setY_(const Eigen::MatrixXcd& H, const Eigen::MatrixXcd& X, double noiseSD)
     {
         H_true_ = H;
         for (int l = 0; l < params_.L_; l++)
         {
             for (int k = 0; k < params_.K_; k++)
             {
-                Y_(l, k) = H(l, k) * X_(l, k) + noiseSD * unitCNormalRand_();
+                Y_(l, k) = H(l, k) * X(l, k) + noiseSD * unitCNormalRand_();
             }
         }
-        // std::cout << "H_true_=" << H_true_ << std::endl;
     }
 
     // pilot信号による等化と復調
-    void equalizeByPilotAndDemodulate()
+    void equalizeByPilotAndDemodulate(const Eigen::MatrixXcd& X)
     {
-        equalizeChannelWithPilot();
+        equalizeChannelWithPilot(X);
         setRxDataByML();
     }
 
     // EMアルゴリズムによる等化と復調
-    double equalizeAndDemodulate()
+    double equalizeAndDemodulate(const Eigen::MatrixXcd& X)
     {
-        double avg_iter = equalizeChannelWithEM();
+        double avg_iter = equalizeChannelWithEM(X);
         setRxDataByML();
         return avg_iter;
     }
@@ -101,14 +77,14 @@ public:
      * ビット誤り数のカウント
      * @return 全ての誤りビット数
      */
-    int getBitErrorCount()
+    int getBitErrorCount(const Eigen::MatrixXi& txData)
     {
         int count = 0;
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
         {
             for (int k = 0; k < params_.K_; k++)
             {
-                count += hammingDistance(grayNum_[txData_(l, k)], grayNum_[rxData_(l, k)]);
+                count += hammingDistance(grayNum_[txData(l, k)], grayNum_[rxData_(l, k)]);
             }
         }
         return count;
@@ -163,19 +139,18 @@ public:
     }
 
     // パイロットシンボルからhを推定し，Hを得る
-    void est_H_by_initial_h(){
-        set_initial_params_by_pilot();
+    void est_H_by_initial_h(const Eigen::MatrixXcd& X){
+        set_initial_params_by_pilot(X);
         Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
         {
             H_est_.row(l) = H_init;
         }
-        // std::cout << "OK6" << std::endl;
     }
 
     // パイロットシンボルからRaghavendra GAICを用いてhを推定し，Hを得る
-    void est_H_by_initial_h_RaghavendraGAIC(){
-        set_initial_params_by_pilot_RaghavendraGAIC();
+    void est_H_by_initial_h_RaghavendraGAIC(const Eigen::MatrixXcd& X){
+        set_initial_params_by_pilot_RaghavendraGAIC(X);
         Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
         {
@@ -183,16 +158,16 @@ public:
         }
     }
 
-    void est_H_by_RaghavendraAIC(){
-        Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC_Update();
+    void est_H_by_RaghavendraAIC(const Eigen::MatrixXcd& X){
+        Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC_Update(X);
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
         {
             H_est_.row(l) = H_init;
         }
     }
 
-    void est_H_by_RaghavendraAIC2(){
-        Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC_Update2();
+    void est_H_by_RaghavendraAIC2(const Eigen::MatrixXcd& X){
+        Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC_Update2(X);
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
         {
             H_est_.row(l) = H_init;
@@ -200,7 +175,7 @@ public:
     }
 
     // 真のモデルと既知の雑音分散を使って、パイロットからML推定を行う
-    void est_H_by_known_model_and_noise(double knownNoiseVariance)
+    void est_H_by_known_model_and_noise(const Eigen::MatrixXcd& X, double knownNoiseVariance)
     {
         activePathIndices_.clear();
         for (int q = 0; q < params_.Q_; ++q)
@@ -211,7 +186,7 @@ public:
             }
         }
 
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
 
         X_l = X_avg.asDiagonal();
@@ -240,14 +215,12 @@ public:
     }
 
     // 16パスあると仮定してパイロットシンボルからインパルス応答をML推定する
-    void est_H_by_16paths()
+    void est_H_by_16paths(const Eigen::MatrixXcd& X)
     {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
 
         X_l = X_avg.asDiagonal();
-
-        std::cout << "X_l=" << X_l.diagonal().transpose() << std::endl;
 
         h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
 
@@ -259,8 +232,8 @@ public:
     }
 
     // パイロットシンボルから直接Hを推定する
-    void est_H_by_pilot(){
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+    void est_H_by_pilot(const Eigen::MatrixXcd& X){
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd H_init = ((X_avg.asDiagonal()).inverse() * Y_avg.transpose()).transpose();
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
@@ -270,12 +243,11 @@ public:
     }
 
     /**
-     * 指定されたマスクを用いてインパルス応答を推定し、周波数応答を保存する (Mode 43用)
-     * @param mask 使用するパスマスク (サイズ Q_ の int ベクトル)
+     * 指定されたマスクを用いてインパルス応答を推定し、周波数応答を保存する
      */
-    void est_H_by_given_mask(const std::vector<int>& mask)
+    void est_H_by_given_mask(const Eigen::MatrixXcd& X, const std::vector<int>& mask)
     {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         X_l = X_avg.asDiagonal();
 
@@ -317,15 +289,12 @@ public:
 
     /**
      * AICで選択されたパスモデル（マスク）を取得する
-     * @return サイズQのベクトル (1:パスあり, 0:パスなし)
      */
     std::vector<int> getEstimatedPathMask()
     {
         std::vector<int> mask(params_.Q_, 0);
-        // h_l は set_initial_params_by_pilot() で非採用パスが0.0に設定されている前提
         for (int q = 0; q < params_.Q_; ++q)
         {
-            // 推定されたパスが有効かどうか (非ゼロなら有効)
             if (std::norm(h_l(q)) > 1e-20) {
                 mask[q] = 1;
             }
@@ -335,11 +304,10 @@ public:
 
     /**
      * ステップ 1: AIC 8パス総当たりによる最良マスクの探索
-     * @return 8要素のマスクベクトル (1:あり, 0:なし)
      */
-    std::vector<int> findBestMaskByExhaustiveAIC_8paths()
+    std::vector<int> findBestMaskByExhaustiveAIC_8paths(const Eigen::MatrixXcd& X)
     {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         X_l = X_avg.asDiagonal();
 
@@ -355,19 +323,14 @@ public:
             }
             int Q_active = static_cast<int>(active_indices.size());
 
-            // 指定されたマスクでの DFT 部分行列の作成
             Eigen::MatrixXcd W_active(params_.K_, Q_active);
             for (int j = 0; j < Q_active; ++j) {
                 W_active.col(j) = W_est_.col(active_indices[j]);
             }
 
-            // LS推定 (Mode 12準拠)
             Eigen::VectorXcd h_active = (W_active.adjoint() * X_l.adjoint() * X_l * W_active).inverse() * W_active.adjoint() * X_l.adjoint() * Y_avg.transpose();
-            
-            // 残差電力計算
             double residual = (Y_avg.transpose() - X_l * W_active * h_active).squaredNorm();
 
-            // AIC算出 (Mode 12 完全準拠)
             double beta = (double)params_.K_ / residual;
             double logL = params_.K_ * std::log(beta) - params_.K_ * std::log(M_PI) - params_.K_;
             double aic = -2.0 * (logL - 2.0 * Q_active);
@@ -378,7 +341,6 @@ public:
             }
         }
 
-        // 最良のマスクをベクトルに変換して返す
         std::vector<int> result(8, 0);
         for (int bit = 0; bit < 8; ++bit) {
             if ((best_mask_int >> bit) & 1) {
@@ -390,11 +352,10 @@ public:
 
     /**
      * ステップ 1 (Raghavendra版): Raghavendra AIC 8パス総当たりによる最良マスクの探索
-     * @return 8要素のマスクベクトル (1:あり, 0:なし)
      */
-    std::vector<int> findBestMaskByExhaustiveRaghavendraAIC_8paths()
+    std::vector<int> findBestMaskByExhaustiveRaghavendraAIC_8paths(const Eigen::MatrixXcd& X)
     {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         X_l = X_avg.asDiagonal();
 
@@ -412,11 +373,9 @@ public:
             for (int j = 0; j < Q_active; ++j) W_active.col(j) = W_est_.col(active_indices[j]);
 
             Eigen::VectorXcd h_active = (W_active.adjoint() * X_l.adjoint() * X_l * W_active).inverse() * W_active.adjoint() * X_l.adjoint() * Y_avg.transpose();
-            
             double residual = (Y_avg.transpose() - X_l * W_active * h_active).squaredNorm();
             double sigma_est_sq = residual / (double)params_.K_;
 
-            // Raghavendra GAIC 計算式
             double V_l = (double)params_.K_ * std::log(sigma_est_sq + 1e-18) / 2.0;
             double penalty = 2.0 * std::log(std::log((double)params_.K_ + 1e-12)) * ((double)Q_active + 1);
             double gaic = V_l + penalty;
@@ -435,14 +394,11 @@ public:
     }
 
     /**
-     * Exhaustive search (全探索) を用いて Raghavendra の GAIC を評価し、
-     * 最良マスクを求めて h_l と noiseVariance_ を設定する。
-     * このメソッドは16パスすべてを対象に総当たり評価を行います。
-     * つかわないかも
+     * Exhaustive search (全探索) を用いて Raghavendra の GAIC を評価し、最良マスクを求めて h_l と noiseVariance_ を設定する。
      */
-    void set_initial_params_by_exhaustive_RaghavendraAIC()
+    void set_initial_params_by_exhaustive_RaghavendraAIC(const Eigen::MatrixXcd& X)
     {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
 
         X_l = X_avg.asDiagonal();
@@ -452,7 +408,6 @@ public:
         double best_sigma_est = 0.0;
         Eigen::VectorXcd best_h_active;
 
-        // 総当たり: 1 から (2^Q - 1)
         const int max_mask = (1 << params_.Q_) - 1;
         for (int mask = 1; mask <= max_mask; ++mask) {
             std::vector<int> active_indices;
@@ -463,20 +418,15 @@ public:
             int Q_active = static_cast<int>(active_indices.size());
             if (Q_active == 0) continue;
 
-            // 部分行列 W_active の作成
             Eigen::MatrixXcd W_active(params_.K_, Q_active);
             for (int j = 0; j < Q_active; ++j) W_active.col(j) = W_est_.col(active_indices[j]);
 
-            // 最小二乗推定
-            Eigen::VectorXcd h_active;
-            // 数値的不安定対策: 正則化は必要なら追加可能
-            h_active = (W_active.adjoint() * X_l.adjoint() * X_l * W_active).inverse() * W_active.adjoint() * X_l.adjoint() * Y_avg.transpose();
+            Eigen::VectorXcd h_active = (W_active.adjoint() * X_l.adjoint() * X_l * W_active).inverse() * W_active.adjoint() * X_l.adjoint() * Y_avg.transpose();
 
             double residual = (Y_avg.transpose() - X_l * W_active * h_active).squaredNorm();
             double sigma_est = residual / (double)params_.K_;
 
-            // Raghavendra の GAIC 相当の評価値
-            double V_l = (double)params_.K_ * std::log(sigma_est + 1e-18) / 2.0; // 0除算回避
+            double V_l = (double)params_.K_ * std::log(sigma_est + 1e-18) / 2.0;
             double penalty = 2.0 * std::log(std::log((double)params_.K_ + 1e-12));
             double gaic = V_l + penalty * ((double)Q_active + 1);
 
@@ -488,7 +438,6 @@ public:
             }
         }
 
-        // best_mask を h_l フルサイズに展開
         this->h_l = Eigen::VectorXcd::Zero(params_.Q_);
         if (best_mask_int != 0) {
             int idx = 0;
@@ -500,120 +449,78 @@ public:
             }
         }
 
-        // 推定雑音分散は sigma_est
         this->noiseVariance_ = best_sigma_est;
     }
 
     // Wrapper法によるAICモデル選択付き等化
-    double equalizeWithWrapperAIC()
+    double equalizeWithWrapperAIC(const Eigen::MatrixXcd& X)
     {
-        // 初期化: パイロットから初期推定
-        set_initial_params_by_pilot();
-        // std::cout << "l=0: " << "h_l=" << h_l.transpose() << std::endl;
+        set_initial_params_by_pilot(X);
         Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
         for (int p = 0; p < params_.NUMBER_OF_PILOT; ++p) H_est_.row(p) = H_init;
 
         double total_iterations_sum = 0.0;
         int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
 
-        // データシンボルごとのループ
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
         {
-            // ---------------------------------------------------------
-            // Step 1: フルモデル (全パス) でEMを収束させる
-            // ---------------------------------------------------------
             activePathIndices_.clear();
             for(int q=0; q<params_.Q_; ++q) activePathIndices_.push_back(q);
 
-            // 初期値をセット (前のシンボル or パイロットの推定値を維持してスタート)
-            // ここでは h_l は前回の結果が残っているのでそのまま使う(Warm Start)
-            
             runEMLoop(l); // フルモデルで収束
 
-            // フルモデルの結果を保存
             Eigen::VectorXcd h_full = h_l;
-            // std::cout << "h_full=" << h_full << std::endl;
             double noise_full = noiseVariance_;
 
-            // ---------------------------------------------------------
-            // Step 2: パスの電力ランキング作成
-            // ---------------------------------------------------------
             std::vector<std::pair<double, int>> pathRank;
             for (int q = 0; q < params_.Q_; ++q) {
                 pathRank.push_back({ std::norm(h_full(q)), q });
             }
-            // 降順ソート
             std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
 
-            // ---------------------------------------------------------
-            // Step 3: 候補モデルごとのWrapper評価
-            // ---------------------------------------------------------
             double min_aic = 1e18; // 十分大きな値
             Eigen::VectorXcd best_h_l = h_full;
             double best_noise = noise_full;
             int best_iter_count = 0;
 
-            // 上位 q 個のパスを使うモデルを順次評価
             for (int q = 1; q <= params_.Q_; ++q) {
-
-                // アクティブパスの設定
                 activePathIndices_.clear();
                 for(int i=0; i<q; ++i) activePathIndices_.push_back(pathRank[i].second);
-                std::sort(activePathIndices_.begin(), activePathIndices_.end()); // インデックス順に整理
+                std::sort(activePathIndices_.begin(), activePathIndices_.end());
 
-                // パラメータのリセット (フルモデルの結果から射影してスタートするのが効率的)
                 h_l.setZero();
                 for(int idx : activePathIndices_) h_l(idx) = h_full(idx);
                 noiseVariance_ = noise_full;
 
-                // このモデルでEMを回す
                 int iter = runEMLoop(l);
 
-                // AICの計算
                 double beta = 1.0 / noiseVariance_;
-                Eigen::VectorXcd Y_vec = Y_.row(l).transpose(); // 受信信号 Y
-                Eigen::VectorXcd H_est = W_est_ * h_l;          // 推定チャネル H = W * h
-                Eigen::VectorXcd XH = X_bar * H_est;            // X_bar * H
+                Eigen::VectorXcd Y_vec = Y_.row(l).transpose();
+                Eigen::VectorXcd H_est = W_est_ * h_l;
+                Eigen::VectorXcd XH = X_bar * H_est;
 
-                // 各項をスカラ(double)として計算
-                // 第1項: ||Y||^2
                 double term1 = Y_vec.squaredNorm();
-
-                // 第2項 & 第3項: - Y^H * X_bar * H - (X_bar * H)^H * Y
-                // これは「-2 * Re( Y^H * (X_bar * H) )」と同じです
                 double term2 = (Y_vec.adjoint() * XH).value().real();
                 double term3 = (XH.adjoint() * Y_vec).value().real();
-
-                // 第4項: H^H * R * H
-                // (H^H * R * H) はエルミート形式なので必ず実数になります
-                double term4 = (H_est.adjoint() * R_moment * H_est).value().real();         // H^H * (R * H)
-                // 対数尤度の簡易計算 (定数項は比較において無視可能だが、ここでは元のコードに合わせる)
+                double term4 = (H_est.adjoint() * R_moment * H_est).value().real();
                 double logL = params_.K_ * std::log(beta) - beta * (term1 - term2 - term3 + term4);
-                // double logL = params_.K_ * std::log(beta) - params_.K_ * std::log(M_PI) - params_.K_;
-                double aic = -2.0 * (logL - 2.0 * q); // k はパラメータ数 (複素数なので自由度 2k)
+                double aic = -2.0 * (logL - 2.0 * q);
 
-                // 最良モデルの更新
                 if (aic < min_aic) {
                     min_aic = aic;
                     best_h_l = h_l;
                     best_noise = noiseVariance_;
-                    best_iter_count = iter; // 便宜上、最良モデルの反復数を記録
+                    best_iter_count = iter;
                 }
             }
 
-            // ---------------------------------------------------------
-            // Step 4: 最良モデルの結果を採用
-            // ---------------------------------------------------------
             h_l = best_h_l;
-            // std::cout << "l=" << l << ": " << "h_l=" << h_l.transpose() << std::endl;
             noiseVariance_ = best_noise;
             total_iterations_sum += best_iter_count;
 
-            // 結果の格納
             H_est_.row(l) = (W_est_ * h_l).transpose();
             for (int k = 0; k < params_.K_; k++)
             {
-                // 等化後の信号
                 R_(l, k) = Y_(l, k) / (W_est_.row(k) * h_l)(0);
             }
         }
@@ -622,23 +529,19 @@ public:
     }
 
     // 埋め込み法（Embedded Method）による等化
-    // EMループのたびにAICでパスを選択し直す
-    double equalizeWithEmbeddedAIC()
+    double equalizeWithEmbeddedAIC(const Eigen::MatrixXcd& X)
     {
-        // 初期化: パイロットから初期推定
-        set_initial_params_by_pilot();
+        set_initial_params_by_pilot(X);
         Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
         for (int p = 0; p < params_.NUMBER_OF_PILOT; ++p) H_est_.row(p) = H_init;
 
         double total_iterations_sum = 0.0;
         int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
-        const int MAX_ITER = 50; // 埋め込み法は振動しやすいので上限を少し抑えるか、逆に増やすか調整
+        const int MAX_ITER = 50;
         const int MIN_ITER = 3;
 
-        // データシンボルごとのループ
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
         {
-            // 収束判定用変数
             Eigen::VectorXi symbol_prev2(params_.K_); symbol_prev2.setConstant(-1);
             Eigen::VectorXi symbol_prev1(params_.K_); symbol_prev1.setConstant(-1);
             Eigen::VectorXi symbol_current(params_.K_);
@@ -646,27 +549,16 @@ public:
 
             int current_iter_count = 0;
 
-            // --- EMループ (Embedded) ---
             for (int iter = 0; iter < MAX_ITER; iter++)
             {
                 current_iter_count = iter + 1;
 
-                // 1. Eステップ
-                // 現在の h_l を使って X_bar, R_moment を更新
                 Estep(l);
 
-                // 2. Mステップ (Full Model Explore)
-                // ★ここが重要: 現在選択されているパスに関わらず、一度「全16パス」で推定し直す
-                // h_full = (W^H * R * W)^-1 * (X_bar * W)^H * Y
                 Eigen::MatrixXcd G = W_est_.adjoint() * R_moment * W_est_;
                 Eigen::VectorXcd b = W_est_.adjoint() * X_bar.adjoint() * Y_.row(l).transpose();
-                
-                // 正則化 (逆行列が計算できない場合への対策)
-                // G += Eigen::MatrixXcd::Identity(params_.Q_, params_.Q_) * 1e-9; 
                 Eigen::VectorXcd h_full = G.inverse() * b;
 
-                // 3. AICによるモデル選択 (埋め込み)
-                // フルモデルの結果を使ってランキング作成
                 std::vector<std::pair<double, int>> pathRank;
                 for (int q = 0; q < params_.Q_; ++q) {
                     pathRank.push_back({ std::norm(h_full(q)), q });
@@ -674,29 +566,20 @@ public:
                 std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
 
                 double min_aic = 1e18;
-                Eigen::VectorXcd best_h_l = h_full; // デフォルトはフル
+                Eigen::VectorXcd best_h_l = h_full;
                 double best_noise = 0.0;
 
-                // パス数 q=1..Q についてAIC評価
                 for (int q = 1; q <= params_.Q_; ++q) {
-                    // 上位q個のインデックスを取得
                     std::vector<int> current_indices;
                     for(int i=0; i<q; ++i) current_indices.push_back(pathRank[i].second);
                     
-                    // 簡易的な射影: フルモデルから該当成分だけ抜き出す
-                    // (厳密には部分行列で再推定すべきだが、計算量が爆発するため射影で近似)
                     Eigen::VectorXcd h_sub = Eigen::VectorXcd::Zero(params_.Q_);
                     for(int idx : current_indices) h_sub(idx) = h_full(idx);
 
-                    // 残差の計算: J = || Y - X_bar * W * h ||^2
-                    // 近似的に X_bar を使う
                     Eigen::VectorXcd Y_est = X_bar * W_est_ * h_sub;
                     double residual = (Y_.row(l).transpose() - Y_est).squaredNorm();
-                    
-                    // 分散推定
                     double beta_est = (double)params_.K_ / residual;
                     
-                    // AIC計算 (簡易式)
                     double logL = params_.K_ * std::log(beta_est) - params_.K_ * std::log(M_PI) - params_.K_;
                     double aic = -2.0 * (logL - 2.0 * q);
 
@@ -707,16 +590,12 @@ public:
                     }
                 }
 
-                // 4. パラメータ更新
-                // ベストなモデルを次の反復の h_l とする
                 h_l = best_h_l;
                 noiseVariance_ = best_noise;
 
-                // 5. 収束判定 (シンボル硬判定の変化を見る)
                 for (int k = 0; k < params_.K_; k++)
                 {
                     std::complex<double> H_current_k = (W_est_.row(k) * h_l)(0);
-                    // ゼロ除算対策
                     if (std::abs(H_current_k) < 1e-9) H_current_k = 1e-9;
                     
                     std::complex<double> R_current_k = Y_(l, k) / H_current_k;
@@ -736,11 +615,10 @@ public:
                 }
                 symbol_prev2 = symbol_prev1;
                 symbol_prev1 = symbol_current;
-            } // EM loop end
+            }
 
             total_iterations_sum += current_iter_count;
 
-            // 結果の格納
             H_est_.row(l) = (W_est_ * h_l).transpose();
             for (int k = 0; k < params_.K_; k++)
             {
@@ -755,21 +633,13 @@ public:
 
     /**
      * AICで選択されたパスモデルが真のモデルと一致しているか判定する
-     * @param trueMask 真のパス有無マスク (1:あり, 0:なし)
-     * @return true: 完全一致, false: 不一致
      */
     bool checkAICAccuracy(const std::vector<int>& trueMask)
     {
-        // h_l は set_initial_params_by_pilot() で非採用パスが0.0に設定されている前提
         for (int q = 0; q < params_.Q_; ++q)
         {
-            // 推定されたパスが有効かどうか (非ゼロなら有効)
             bool isSelected = (std::norm(h_l(q)) > 1e-20); 
-
-            // 真のパスが有効かどうか
             bool isTrue = (trueMask[q] != 0);
-
-            // 不一致があれば false
             if (isSelected != isTrue) {
                 return false;
             }
@@ -779,37 +649,24 @@ public:
 
     /**
      * 文献の式(61)に基づく伝送路推定評価値（SNR劣化比）を計算する
-     * 値が 1.0 に近いほど良い（1.0 = 劣化なし）。
-     * @param noiseSD 真の雑音標準偏差
-     * @return 1試行あたりの平均評価値
      */
     double getSNRDegradationMetric(double noiseSD)
     {
         double sum_metric = 0.0;
         int count = 0;
-        // β = 1 / σ_n^2
         double beta = 1.0 / (noiseSD * noiseSD);
-        // σ_X^2 = 1.0 (シンボル生成時に正規化されているため)
         double sigma_X_sq = 1.0; 
 
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
         {
             for (int k = 0; k < params_.K_; k++)
             {
-
-                double norm_H_sq = std::norm(H_true_(l, k)); // |H|^2
-
-                // 真のチャネルゲインがほぼ0の場合のゼロ除算回避
+                double norm_H_sq = std::norm(H_true_(l, k));
                 if (norm_H_sq < 1e-20) continue;
 
-                // 式(61) の計算
-                // 第1項
                 double term1 = ((std::norm(std::conj(H_est_(l, k)) * H_true_(l, k)) / norm_H_sq )- 1) * sigma_X_sq * beta;
-                
-                // 第2項
                 double term2 = std::norm(H_est_(l, k)) / norm_H_sq;
                 
-                // 和が指標値
                 sum_metric += (term1 + term2);
                 count++;
             }
@@ -821,52 +678,35 @@ public:
 
     /**
      * パイロットAIC固定パス法
-     * パイロットでAICを行いパスを選択し、そのパスを固定してデータ部のEM推定を行う
      */
-    double equalizeWithPilotAICFixedPath()
+    double equalizeWithPilotAICFixedPath(const Eigen::MatrixXcd& X)
     {
-        // 1. パイロットシンボルを用いてAICによる初期推定を行う
-        // これにより、h_l にはAICで選ばれたパス成分のみが入り、他は0になる
-        set_initial_params_by_pilot();
+        set_initial_params_by_pilot(X);
 
-        // std::cout << "l=0: " << "h_l=" << h_l.transpose() << std::endl;
-
-        // 2. AICで選ばれたパスを activePathIndices_ に固定する
         activePathIndices_.clear();
         for(int q = 0; q < params_.Q_; ++q) {
-            // h_l の成分が非ゼロ（採用されたパス）であればインデックスを追加
             if(std::norm(h_l(q)) > 1e-20) { 
                 activePathIndices_.push_back(q);
             }
         }
-        // (念のためソート)
         std::sort(activePathIndices_.begin(), activePathIndices_.end());
 
-        // パイロット区間のH_estを保存
         Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
         for (int p = 0; p < params_.NUMBER_OF_PILOT; ++p) H_est_.row(p) = H_init;
 
         double total_iterations_sum = 0.0;
         int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
 
-        // 3. データシンボルごとのループ (パスは固定)
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
         {
-            // runEMLoop は activePathIndices_ に含まれるパスのみを更新する
-            // ここではパイロットで決めたパス構成が維持される
             int iter = runEMLoop(l);
-           //  std::cout << "l=" << l << ": " << h_l.transpose() << std::endl;
-            
             total_iterations_sum += iter;
 
-            // 結果の格納
             H_est_.row(l) = (W_est_ * h_l).transpose();
             for (int k = 0; k < params_.K_; k++)
             {
                 std::complex<double> val = (W_est_.row(k) * h_l)(0);
-                // ゼロ除算回避
                 if(std::abs(val) < 1e-12) val = 1e-12;
-                
                 R_(l, k) = Y_(l, k) / val;
             }
         }
@@ -874,110 +714,17 @@ public:
         return total_iterations_sum / static_cast<double>(dataSymbolCount);
     }
 
-    /**
-     * [Mode 23用] 指定したサブキャリアの送信信号(X)の時間変動を出力
-     */
-    void exportTxSymbolTrace(int target_k, const std::string& filename)
-    {
-        std::ofstream ofs(filename);
-        if (!ofs) {
-            std::cerr << "Error: Could not open file " << filename << std::endl;
-            return;
-        }
-
-        // ヘッダー: l(時間/シンボル番号), I成分, Q成分, 振幅, 位相
-        ofs << "l,Tx_I,Tx_Q,Tx_Abs,Tx_Phase" << std::endl;
-
-        for (int l = 0; l < params_.L_; l++)
-        {
-            // 送信信号 X
-            std::complex<double> val = X_(l, target_k);
-
-            ofs << l << ","
-                << val.real() << ","
-                << val.imag() << ","
-                << std::abs(val) << ","
-                << std::arg(val)
-                << std::endl;
-        }
-        ofs.close();
-        std::cout << "Exported Tx Trace (k=" << target_k << ") to " << filename << std::endl;
-    }
-
-    /**
-     * [Mode 24用] 指定したサブキャリアの「周波数応答の影響を受けた送信信号(HX)」の時間変動を出力
-     * ※ H は外部（Channelクラス）から渡してもらう
-     */
-    void exportFadedSymbolTrace(int target_k, const std::string& filename, const Eigen::MatrixXcd& H_current)
-    {
-        std::ofstream ofs(filename);
-        if (!ofs) {
-            std::cerr << "Error: Could not open file " << filename << std::endl;
-            return;
-        }
-
-        // ヘッダー
-        ofs << "l,Faded_I,Faded_Q,Faded_Abs,Faded_Phase" << std::endl;
-
-        for (int l = 0; l < params_.L_; l++)
-        {
-            // 送信信号 X
-            std::complex<double> x_val = X_(l, target_k);
-            // チャネル H
-            std::complex<double> h_val = H_current(l, target_k);
-            
-            // 影響を受けた信号 (Noiseなし)
-            std::complex<double> val = h_val * x_val;
-
-            ofs << l << ","
-                << val.real() << ","
-                << val.imag() << ","
-                << std::abs(val) << ","
-                << std::arg(val)
-                << std::endl;
-        }
-        ofs.close();
-        std::cout << "Exported Faded Trace (k=" << target_k << ") to " << filename << std::endl;
-    }
-
-    /**
-     * [Mode 25用] 指定したサブキャリアのチャネル応答の絶対値(|H|)の時間変動を出力
-     */
-    void exportChannelMagnitudeTrace(int target_k, const std::string& filename, const Eigen::MatrixXcd& H_current)
-    {
-        std::ofstream ofs(filename);
-        if (!ofs) {
-            std::cerr << "Error: Could not open file " << filename << std::endl;
-            return;
-        }
-
-        // ヘッダー: l(シンボル番号), |H|
-        ofs << "l,H_Abs" << std::endl;
-
-        for (int l = 0; l < params_.L_; l++)
-        {
-            // 指定したサブキャリア k の複素チャネル利得の絶対値を計算
-            double h_mag = std::abs(H_current(l, target_k));
-
-            ofs << l << "," << h_mag << std::endl;
-        }
-        ofs.close();
-        std::cout << "Exported Channel Magnitude Trace (k=" << target_k << ") to " << filename << std::endl;
-    }
-
-    /**
-     * 推定されたパス係数ベクトル (h_est_) を取得する
-     * @return Eigen::VectorXcd 推定パス係数ベクトル
-     */
+    // ゲッター群
     Eigen::VectorXcd getEstimatedPathCoefficients() const {
         return h_l;
     }
 
+    const Eigen::MatrixXcd &getH_est() const { return H_est_; }
+    const Eigen::MatrixXcd &getH_true() const { return H_true_; }
+    const Eigen::MatrixXcd &getY() const { return Y_; }
+
     /**
      * ΔH を計算して返すヘルパー
-     * 定義: DeltaH = H_est - H_true
-     * @param l フレームインデックス
-     * @return 1 x K の行ベクトル (Eigen::RowVectorXcd)
      */
     Eigen::RowVectorXcd computeDeltaHRow(int l) const
     {
@@ -989,8 +736,6 @@ public:
 
     /**
      * 添付画像の x = -H/A を使って delta 行ベクトルを作る
-     * A = |H_{l,k}|^2 P_x β + 1
-     * この関数は mode35 で、(l,k)=(0,0) の1要素に x を入れる用途を想定する。
      */
     Eigen::RowVectorXcd computeDeltaRowFromPhotoX(int l,
                                                   double noiseSD,
@@ -1018,12 +763,6 @@ public:
     }
 
     // ΔH（RowVector）を与えて各サブキャリアの γ_k を返す。
-    // - DeltaH_row: ΔH = H_est - H_true の行ベクトル（l に対応）
-    // - l: 時刻/フレームインデックス（H_true_ の行を使う）
-    // - noiseSD: シミュレータの真の雑音標準偏差
-    // - Px: 送信シンボル平均電力（デフォルト 1.0）
-    // - beta_override: β を明示したい場合は正値を渡す（負なら noiseSD から計算）
-    // - returnPerSubcarrier: true->K要素のベクトル、false->スカラー平均（1要素ベクトル）
     Eigen::VectorXd computeGammaFromDeltaH(const Eigen::RowVectorXcd &DeltaH_row,
                                            int l,
                                            double noiseSD,
@@ -1043,20 +782,19 @@ public:
         Eigen::VectorXd gamma(params_.K_);
 
         for (int k = 0; k < params_.K_; ++k) {
-            double H_abs_sq = std::norm(H_true_(l, k));           // |H_k|^2
-            if (H_abs_sq < 1e-20) { // ゼロ除算回避: 非現実的に小さい場合は 0 を返す
+            double H_abs_sq = std::norm(H_true_(l, k));
+            if (H_abs_sq < 1e-20) {
                 gamma(k) = 0.0;
                 continue;
             }
-            double DH_abs_sq = std::norm(DeltaH_row(k));         // |ΔH_k|^2
-            double cross_abs_sq = std::norm(DeltaH_row(k) * H_true_(l, k)); // |ΔH_k * H_k|^2
-            double plas_abs_sq = std::norm(H_true_(l, k) + DeltaH_row(k)); // |H_k + ΔH_k|^2
+            double DH_abs_sq = std::norm(DeltaH_row(k));
+            double cross_abs_sq = std::norm(DeltaH_row(k) * H_true_(l, k));
+            double plas_abs_sq = std::norm(H_true_(l, k) + DeltaH_row(k));
 
-            // 式(74) の形に合わせた実装（分子/分母の形を反映）
-            double numerator = H_abs_sq * H_abs_sq * Px * beta; // |H_k|^4 * P_x * β
-            double denominator = cross_abs_sq * Px * beta       // |ΔH_k * H_k|^2 * P_x * β
-                                 + plas_abs_sq                 // + |H_k + ΔH_k|^2
-                                 + eps;                        // 数値安定化
+            double numerator = H_abs_sq * H_abs_sq * Px * beta;
+            double denominator = cross_abs_sq * Px * beta
+                                 + plas_abs_sq
+                                 + eps;
 
             gamma(k) = numerator / denominator;
         }
@@ -1083,19 +821,16 @@ public:
         }
 
         double beta = (beta_override > 0.0) ? beta_override : 1.0 / (noiseSD * noiseSD);
-        const double eps = 1e-12;
         Eigen::VectorXd gamma(params_.K_);
 
         for (int k = 0; k < params_.K_; ++k) {
-            double H_abs_sq = std::norm(H_true_(l, k));           // |H_k|^2
-            if (H_abs_sq < 1e-20) { // ゼロ除算回避: 非現実的に小さい場合は 0 を返す
+            double H_abs_sq = std::norm(H_true_(l, k));
+            if (H_abs_sq < 1e-20) {
                 gamma(k) = 0.0;
                 continue;
             }
 
-            // 式(74) の形に合わせた実装（分子/分母の形を反映）
-            double numerator = H_abs_sq * Px * beta + 1; // |H_k|^4 * P_x * β
-           
+            double numerator = H_abs_sq * Px * beta + 1;
             gamma(k) = numerator;
         }
 
@@ -1112,18 +847,15 @@ public:
 
     /**
      * @brief 仮定するパス数 q = 1 ... Q_ に対する通常AICおよびRaghavendra GAICを計算する
-     * @return pair<vector<double>, vector<double>> {aic_values, gaic_values}
      */
-    std::pair<std::vector<double>, std::vector<double>> calculateAICvsQ()
+    std::pair<std::vector<double>, std::vector<double>> calculateAICvsQ(const Eigen::MatrixXcd& X)
     {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         X_l = X_avg.asDiagonal();
 
-        // まずフルモデルでのLS推定を行う（パス電力のランキングを作成するため）
         Eigen::VectorXcd h_full = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
 
-        // パス電力の大きい順にソートする
         std::vector<std::pair<double, int>> pathRank;
         for (int q = 0; q < params_.Q_; ++q) {
             pathRank.push_back({ std::norm(h_full(q)), q });
@@ -1134,31 +866,25 @@ public:
         std::vector<double> gaic_values(params_.Q_, 0.0);
 
         for (int q = 1; q <= params_.Q_; ++q) {
-            // 上位 q 個のインデックスを取得してソート
             std::vector<int> selected_indices;
             for (int i = 0; i < q; ++i) {
                 selected_indices.push_back(pathRank[i].second);
             }
             std::sort(selected_indices.begin(), selected_indices.end());
 
-            // 部分DFT行列 W_tilde の作成
             Eigen::MatrixXcd W_tilde(params_.K_, q);
             for (int i = 0; i < q; ++i) {
                 W_tilde.col(i) = W_est_.col(selected_indices[i]);
             }
 
-            // 部分モデルでのLS推定
             Eigen::VectorXcd h_active = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose();
             
-            // 残差平方和
             double residual = (Y_avg.transpose() - X_l * W_tilde * h_active).squaredNorm();
 
-            // 1. 通常AICの計算
             double beta = (double)params_.K_ / residual;
             double logL = params_.K_ * std::log(beta) - params_.K_ * std::log(M_PI) - params_.K_;
             aic_values[q - 1] = -2.0 * (logL - 2.0 * q);
 
-            // 2. Raghavendra GAICの計算
             double sigma_est = residual / (double)params_.K_;
             double V_l = (double)params_.K_ * std::log(sigma_est + 1e-18) / 2.0;
             double penalty = 2.0 * std::log(std::log((double)params_.K_ + 1e-12)) * ((double)q + 1);
@@ -1171,59 +897,36 @@ public:
 private:
     const SimulationParameters &params_;
     const Eigen::MatrixXcd &W_est_;
-    EstimatorParameters est_params_;
     std::vector<int> grayNum_;
-
-    Eigen::MatrixXi txData_;
-    Eigen::MatrixXi rxData_;
     Eigen::VectorXcd symbol_;
+
+    Eigen::MatrixXi rxData_;
     Eigen::MatrixXcd Y_;
-    Eigen::MatrixXcd X_;
-    Eigen::MatrixXcd X_l;
-    Eigen::MatrixXcd R_;
     Eigen::MatrixXcd H_est_;
     Eigen::MatrixXcd H_true_;
+    double noiseVariance_;
+    cnormal_distribution<> unitCNormalRand_;
+    std::vector<int> activePathIndices_;
+
+    Eigen::MatrixXcd X_l;
+    Eigen::MatrixXcd R_;
     Eigen::VectorXd xPro;
     Eigen::MatrixXcd X_bar;
     Eigen::MatrixXd R_moment;
     Eigen::VectorXcd h_l;
-    double noiseVariance_;
-    uniform_int_distribution<> unitIntUniformRand_;
-    cnormal_distribution<> unitCNormalRand_;
-    std::vector<int> activePathIndices_;
 
-    // // DFT行列Wの生成:式(17)
-    // void setW_est_()
-    // {
-    //     for (int q = 0; q < est_params_.Q_est; ++q)
-    //     {
-    //         for (int k = 0; k < params_.K_ / 2; ++k)
-    //         {
-    //             // -26から-1番目のキャリヤ
-    //             W_est_(k, q) = std::polar(1.0, -2.0 * M_PI * ((double)k - (double)params_.K_ / 2.0) * (double)q / (double)params_.NUMBER_OF_FFT);
-    //             // 1から26番目のキャリヤ
-    //             W_est_(k + params_.K_ / 2, q) = std::polar(1.0, -2.0 * M_PI * ((double)k + 1.0) * (double)q / (double)params_.NUMBER_OF_FFT);
-    //         }
-    //     }
-    //     // std::cout << "W_=" << W_ << std::endl;
-    // }
-
-    /**
-     * シンボル生成
-     */
     void setSymbol() {
-        int M = params_.NUMBER_OF_SYMBOLS;               // シンボル数 (M = 2^NUMBER_OF_BIT)
-        int sqrtM = sqrt(M);                    // 実部/虚部のレベル数 (例: 16QAMならsqrtM=4)
+        int M = params_.NUMBER_OF_SYMBOLS;
+        int sqrtM = sqrt(M);
         double P = 1.0 / (2.0 * (M - 1) / 3.0);
 
-        // シンボル設計
         int i = 0;
         for (int v1 = 0; v1 < sqrtM; v1++) {
             for (int v2 = 0; v2 < sqrtM; v2++) {
-                symbol_(i).real((2 * v1 - (sqrtM - 1)) * sqrt(P));  // 実部
-                if (v1 % 2 == 0) {  // v1が偶数のときは通常の配置
-                    symbol_(i).imag((2 * v2 - (sqrtM - 1)) * sqrt(P));  // 虚部
-                } else {  // v1が奇数のとき、虚部の値を逆順にする
+                symbol_(i).real((2 * v1 - (sqrtM - 1)) * sqrt(P));
+                if (v1 % 2 == 0) {
+                    symbol_(i).imag((2 * v2 - (sqrtM - 1)) * sqrt(P));
+                } else {
                     symbol_(i).imag(((sqrtM - 1) - 2 * v2) * sqrt(P));
                 }
                 i++;
@@ -1231,87 +934,55 @@ private:
         }
     }
 
-    /**
-     * グレイ符号の生成 (追加)
-     */
     int grayCode(int num) {
         return num ^ (num >> 1);
     }
 
-    /**
-     * グレイ符号のテーブルを作成 (追加)
-     */
     void setGrayNum() {
         for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++) {
             grayNum_[i] = grayCode(i);
         }
     }
 
-    // パイロットシンボルからｈの初期値を得る
-    void set_initial_params_by_pilot()
+    void set_initial_params_by_pilot(const Eigen::MatrixXcd& X)
     {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
 
         X_l = X_avg.asDiagonal();
         h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
 
-        // for (int q = 0; q < params_.Q_; ++q) {
-        //     std::cout << "h_l(" << q << ") = " << std::norm(h_l(q)) << std::endl;
-        // }
-
-        // 電力(norm)とインデックスのペアを作成
         std::vector<std::pair<double, int>> pathRank;
         for (int q = 0; q < params_.Q_; ++q) {
-            pathRank.push_back({ std::norm(h_l(q)), q }); // 電力と元のインデックス
+            pathRank.push_back({ std::norm(h_l(q)), q });
         }
 
-        // 電力が大きい順にソート
         std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
 
-        // for (const auto& p : pathRank) {
-        //     // p.first が電力、p.second が元のインデックス
-        //     std::cout << "Power: " << p.first << ", Index: " << p.second << std::endl;
-        // }
-
         std::vector<double> aic_list(params_.Q_);
-        std::vector<double> beta_list(params_.Q_);             // 各パスモデルにおける雑音精度
-
-        // std::cout << "W_est_ >> " << W_est_.transpose() << std::endl;
+        std::vector<double> beta_list(params_.Q_);
 
         for (int Q_tilde = 1; Q_tilde <= params_.Q_; ++Q_tilde) {
-            // インデックスのソート
             std::vector<int> selected_indices;
             for (int i = 0; i < Q_tilde; ++i) {
                 selected_indices.push_back(pathRank[i].second);
             }
             std::sort(selected_indices.begin(), selected_indices.end());
 
-            // W_tilde の生成
             Eigen::MatrixXcd W_tilde(params_.K_, Q_tilde);
             for (int i = 0; i < Q_tilde; ++i) {
-                int original_idx = selected_indices[i]; // ソート済みの上位インデックスを取得
-                W_tilde.col(i) = W_est_.col(original_idx); // 対応するDFT行列の列をコピー
+                int original_idx = selected_indices[i];
+                W_tilde.col(i) = W_est_.col(original_idx);
             }
 
-            // std::cout << "W_tilde >> " << W_tilde << std::endl;
-
-            // 各パスモデルにおける推定値を計算
             Eigen::VectorXcd h_active = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose();
-            // std::cout << "h_l >> " << h_tilde_list[Q_tilde - 1] << std::endl;
             double residual = (Y_avg.transpose() - X_l * W_tilde * h_active).squaredNorm();
             beta_list[Q_tilde - 1] = (double)params_.K_ / residual;
 
-            // AIC の計算
             double logL = params_.K_ * std::log(beta_list[Q_tilde - 1]) - params_.K_ * std::log(M_PI) - params_.K_;
             aic_list[Q_tilde - 1] = -2.0 * (logL - 2.0 * Q_tilde);
-            // std::cout << "aic >> " << aic_list[Q_tilde - 1] << std::endl;
         }
 
-        // std::cout << "OK3" << std::endl;
-
-        // 最良モデルの計算フェーズ
-        // AIC が最小となるインデックスを特定
         int best_idx = std::distance(aic_list.begin(), std::min_element(aic_list.begin(), aic_list.end()));
         int best_Q_tilde = best_idx + 1;
 
@@ -1327,68 +998,56 @@ private:
         }
 
         Eigen::VectorXcd h_final_active = (W_final.adjoint() * X_l.adjoint() * X_l * W_final).inverse() * W_final.adjoint() * X_l.adjoint() * Y_avg.transpose();
-        // std::cout << "h_final_active >> " << h_final_active << std::endl;
 
-        // フルサイズ配列への展開（非採用パスは0埋め）
         this->h_l = Eigen::VectorXcd::Zero(params_.Q_);
         for (int i = 0; i < best_Q_tilde; ++i) {
             this->h_l(final_indices[i]) = h_final_active(i);
         }
 
-        // 6. パラメータ更新
         this->noiseVariance_ = 1.0 / beta_list[best_idx];
     }
 
-    // パイロットシンボルからRaghavendra GAICを用いてhの初期値を得る
-    void set_initial_params_by_pilot_RaghavendraGAIC()
+    void set_initial_params_by_pilot_RaghavendraGAIC(const Eigen::MatrixXcd& X)
     {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
 
         X_l = X_avg.asDiagonal();
         h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
 
-        // 電力(norm)とインデックスのペアを作成
         std::vector<std::pair<double, int>> pathRank;
         for (int q = 0; q < params_.Q_; ++q) {
-            pathRank.push_back({ std::norm(h_l(q)), q }); // 電力と元のインデックス
+            pathRank.push_back({ std::norm(h_l(q)), q });
         }
 
-        // 電力が大きい順にソート
         std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
 
         std::vector<double> gaic_list(params_.Q_);
         std::vector<double> residual_list(params_.Q_);
 
         for (int Q_tilde = 1; Q_tilde <= params_.Q_; ++Q_tilde) {
-            // インデックスのソート
             std::vector<int> selected_indices;
             for (int i = 0; i < Q_tilde; ++i) {
                 selected_indices.push_back(pathRank[i].second);
             }
             std::sort(selected_indices.begin(), selected_indices.end());
 
-            // W_tilde の生成
             Eigen::MatrixXcd W_tilde(params_.K_, Q_tilde);
             for (int i = 0; i < Q_tilde; ++i) {
-                int original_idx = selected_indices[i]; // ソート済みの上位インデックスを取得
-                W_tilde.col(i) = W_est_.col(original_idx); // 対応するDFT行列の列をコピー
+                int original_idx = selected_indices[i];
+                W_tilde.col(i) = W_est_.col(original_idx);
             }
 
-            // 各パスモデルにおける推定値を計算
             Eigen::VectorXcd h_active = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose();
             double residual = (Y_avg.transpose() - X_l * W_tilde * h_active).squaredNorm();
             residual_list[Q_tilde - 1] = residual;
 
-            // Raghavendra GAIC の計算
             double sigma_est = residual / (double)params_.K_;
             double V_l = (double)params_.K_ * std::log(sigma_est + 1e-18) / 2.0;
             double penalty = 2.0 * std::log(std::log((double)params_.K_ + 1e-12)) * ((double)Q_tilde + 1);
             gaic_list[Q_tilde - 1] = V_l + penalty;
         }
 
-        // 最良モデルの計算フェーズ
-        // GAIC が最小となるインデックスを特定
         int best_idx = std::distance(gaic_list.begin(), std::min_element(gaic_list.begin(), gaic_list.end()));
         int best_Q_tilde = best_idx + 1;
 
@@ -1405,74 +1064,20 @@ private:
 
         Eigen::VectorXcd h_final_active = (W_final.adjoint() * X_l.adjoint() * X_l * W_final).inverse() * W_final.adjoint() * X_l.adjoint() * Y_avg.transpose();
 
-        // フルサイズ配列への展開（非採用パスは0埋め）
         this->h_l = Eigen::VectorXcd::Zero(params_.Q_);
         for (int i = 0; i < best_Q_tilde; ++i) {
             this->h_l(final_indices[i]) = h_final_active(i);
         }
 
-        // 6. パラメータ更新
         this->noiseVariance_ = residual_list[best_idx] / (double)params_.K_;
     }
 
-    // パイロットシンボルからRaghavendraAICを用いての初期値を得る
-    Eigen::RowVectorXcd set_initial_params_by_RaghavendraAIC()
+    Eigen::RowVectorXcd set_initial_params_by_RaghavendraAIC_Update(const Eigen::MatrixXcd& X)
     {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
 
         X_l = X_avg.asDiagonal();
-        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * (W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose());
-
-        int P = params_.Q_ - 1; // 全パス数
-        Eigen::VectorXcd current_R = Y_avg.transpose();
-        std::vector<int> min_idx_list; // 各ループで除外するパスのインデックスを保存
-
-        while (P >= 0) {
-            std::vector<double> GAIC_list(P + 1);
-            for(int i = 0; i <= P; i++){
-                Eigen::VectorXcd h_active = Eigen::VectorXcd::Zero(params_.Q_);
-                for(int t = 0; t <= i; t++){
-                    h_active(t) = h_l(t);
-                } ;
-                double sigma_est = ((current_R - X_l * W_est_ * h_active).squaredNorm()) / (double)params_.K_;
-                double V_l = (params_.K_ * std::log(sigma_est)) / 2.0;
-                GAIC_list[i] = V_l + 2 * std::log(std::log(params_.K_)) * (i + 2); // i + 1 が論文中のLに相当
-            }
-            int min_idx = std::distance(GAIC_list.begin(), std::min_element(GAIC_list.begin(), GAIC_list.end()));
-            min_idx_list.push_back(min_idx);
-            current_R = current_R - X_l * W_est_.col(min_idx) * h_l(min_idx); // 除外したパスの影響を減算
-            P = min_idx - 1; // 次のループでは除外したパス以降を評価
-        }
-
-        // 抽出されたタップのインデックスを昇順にソートする
-        // （順番がバラバラだと行列の列順が変わってしまうため、元通りに並べ直す）
-        std::sort(min_idx_list.begin(), min_idx_list.end());
-
-        int num_active_taps = min_idx_list.size();
-
-        // 有効タップのみを抜き出した縮小DFT行列 W_tilde の作成
-        // W_tilde は (K × num_active_taps) のサイズになります
-        Eigen::MatrixXcd W_tilde(params_.K_, num_active_taps);
-        for (int j = 0; j < num_active_taps; ++j) {
-            W_tilde.col(j) = W_est_.col(min_idx_list[j]); // 該当する列だけをコピー
-        }
-
-        // 3. 論文の式(11)に基づく、最終的な改良最小二乗推定 (Improved LS)
-        // h_ils は (num_active_taps × 1) のベクトルになります
-        Eigen::VectorXcd h_ils = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * (W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose());
-
-        return (W_tilde * h_ils).transpose();
-    }
-
-    // パイロットシンボルからRaghavendraAICを用いての初期値を得る (反復更新版)
-    Eigen::RowVectorXcd set_initial_params_by_RaghavendraAIC_Update()
-    {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
-        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
-
-        X_l = X_avg.asDiagonal();
-        // 初期のフルLS推定
         h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * (W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose());
 
         int P = params_.Q_ - 1; 
@@ -1487,16 +1092,14 @@ private:
                     h_temp(t) = h_l(t);
                 }
                 double sigma_est = ((current_R - X_l * W_est_ * h_temp).squaredNorm()) / (double)params_.K_;
-                double V_l = (params_.K_ * std::log(sigma_est + 1e-12)) / 2.0; // 0除算防止
+                double V_l = (params_.K_ * std::log(sigma_est + 1e-12)) / 2.0;
                 GAIC_list[i] = V_l + 2.0 * std::log(std::log(params_.K_)) * (i + 1); 
             }
             int best_L = std::distance(GAIC_list.begin(), std::min_element(GAIC_list.begin(), GAIC_list.end()));
             selected_taps.push_back(best_L);
 
-            // 確定したパスの影響を現在の受信信号から減算
             current_R = current_R - X_l * W_est_.col(best_L) * h_l(best_L); 
             
-            // 残りのパス (0 から best_L - 1) について、最新の current_R を用いて推定値を更新
             P = best_L - 1; 
             if (P >= 0) {
                 Eigen::MatrixXcd W_rem = W_est_.leftCols(P + 1);
@@ -1517,14 +1120,12 @@ private:
         return (W_tilde * h_ils).transpose();
     }
 
-        // パイロットシンボルからRaghavendraAICを用いての初期値を得る (反復更新版)
-    Eigen::RowVectorXcd set_initial_params_by_RaghavendraAIC_Update2()
+    Eigen::RowVectorXcd set_initial_params_by_RaghavendraAIC_Update2(const Eigen::MatrixXcd& X)
     {
-        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
 
         X_l = X_avg.asDiagonal();
-        // 初期のフルLS推定
         h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
 
         int P = params_.Q_ - 1; 
@@ -1534,27 +1135,20 @@ private:
         while (P >= 0) {
             std::vector<double> GAIC_list(P + 1);
             for(int i = 0; i <= P; i++){
-                // 1. W_est_ の左から L 列分だけを抽出（F_1 に相当）
                 Eigen::MatrixXcd W_L = W_est_.leftCols(i + 1);
-
-                // 2. 長さ L のチャネル推定値を一括計算 (式5 / 式14)
                 Eigen::VectorXcd h_L_est = (W_L.adjoint() * X_l.adjoint() * X_l * W_L).inverse() * (W_L.adjoint() * X_l.adjoint() * current_R);
 
-                // 3. 長さ Q_ のゼロベクトルを用意し、先頭 L 個に計算結果を入れる（0パディング）
                 Eigen::VectorXcd h_temp = Eigen::VectorXcd::Zero(params_.Q_);
                 h_temp.head(i + 1) = h_L_est;
 
                 double sigma_est = ((current_R - X_l * W_est_ * h_temp).squaredNorm()) / (double)params_.K_;
-                double V_l = (params_.K_ * std::log(sigma_est + 1e-12)) / 2.0; // 0除算防止
+                double V_l = (params_.K_ * std::log(sigma_est + 1e-12)) / 2.0;
                 GAIC_list[i] = V_l + 2.0 * std::log(std::log(params_.K_)) * (i + 1); 
             }
             int best_L = std::distance(GAIC_list.begin(), std::min_element(GAIC_list.begin(), GAIC_list.end()));
             selected_taps.push_back(best_L);
 
-            // 確定した有効タップ成分を削除                                                                                                                                                                         
             h_l(best_L) = 0.0;                                                                                                                                                                                      
-                                                                                                                                                                                                                        
-            // 確定したパスの影響を現在の受信信号から減算                                                                                                                                                           
             current_R = X_l * W_est_ * h_l;
 
             P = best_L - 1;
@@ -1573,9 +1167,9 @@ private:
         return (W_tilde * h_ils).transpose();
     }
 
-    void equalizeChannelWithPilot()
+    void equalizeChannelWithPilot(const Eigen::MatrixXcd& X)
     {
-        set_initial_params_by_pilot();
+        set_initial_params_by_pilot(X);
         Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
         {
@@ -1592,9 +1186,9 @@ private:
         }
     }
 
-    double equalizeChannelWithEM()
+    double equalizeChannelWithEM(const Eigen::MatrixXcd& X)
     {
-        set_initial_params_by_pilot();
+        set_initial_params_by_pilot(X);
 
         Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
@@ -1624,14 +1218,12 @@ private:
             for (int iter = 0; iter < MAX_ITER; iter++)
             {
                 current_iter_count = iter + 1;
-                // Eステップ
                 Estep(l);
-                // Mステップ
                 Mstep(l);
 
                 for (int k = 0; k < params_.K_; k++)
                 {
-                    std::complex<double> H_current_k = (W_est_.row(k) *h_l)(0);
+                    std::complex<double> H_current_k = (W_est_.row(k) * h_l)(0);
                     std::complex<double> R_current_k = Y_(l, k) / H_current_k;
 
                     for(int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++){
@@ -1668,8 +1260,6 @@ private:
         return iter_counts.mean();
     }
 
-    // 指定されたパス(activePathIndices_)でEMアルゴリズムを回す関数
-    // 戻り値: 収束までの反復回数
     int runEMLoop(int l, int max_iter = 100) {
         const int MIN_ITER = 3;
         Eigen::VectorXi symbol_prev2(params_.K_);
@@ -1686,13 +1276,9 @@ private:
         {
             current_iter_count = iter + 1;
             
-            // Eステップ
             Estep(l);
-            
-            // Mステップ (activePathIndices_ に基づいて更新)
             Mstep(l);
 
-            // 硬判定シンボルの更新（収束判定用）
             for (int k = 0; k < params_.K_; k++)
             {
                 std::complex<double> H_current_k = (W_est_.row(k) * h_l)(0);
@@ -1721,11 +1307,8 @@ private:
 
     void Estep(int l)
     {
-        // std::cout << "h_l=" << h_l << std::endl;
         Eigen::VectorXcd H_current = W_est_ * h_l;
         double variance = noiseVariance_;
-        // std::cout << "H_current=" << H_current << std::endl;
-        // varianceが非常に小さい場合のアンダーフロー対策（ゼロ除算を避ける）
         if (variance < std::numeric_limits<double>::epsilon()) {
             variance = std::numeric_limits<double>::epsilon();
         }
@@ -1744,28 +1327,16 @@ private:
             Eigen::VectorXd posterior_prob(params_.NUMBER_OF_SYMBOLS);
             for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++)
             {
-                // exp(対数尤度 - 最大対数尤度) を計算
-                // exp の引数は最大でも0なので、アンダーフローしにくい
                 posterior_prob(i) = std::exp(log_likelihoods(i) - log_max);
                 sumxP_shifted += posterior_prob(i);
             }
 
             if (sumxP_shifted <= 0.0) {
-                // 稀にすべてのexpの結果が0になった場合 (非常に考えにくいが念のため)
-                //  posterior_prob.fill(1.0 / static_cast<double>(params_.NUMBER_OF_SYMBOLS));
-                //  if (k == 0) { // デバッグ用にメッセージ表示
-                //       std::cerr << "Warning: sumxP_shifted is zero or negative at l=" << l << ", k=" << k << ". Assigning equal probabilities." << std::endl;
-                    // エラーメッセージを構築
                 std::string error_msg = "FATAL ERROR: sumxP_shifted is zero or negative at l=" 
                           + std::to_string(l) + ", k=" + std::to_string(k);
-
-                // どの場所でエラーが起きたかコンソールに表示
                 std::cerr << error_msg << std::endl;
-                
-                // 例外を投げてプログラムを停止させます
                 throw std::runtime_error(error_msg);   
             } else {
-                 // 通常の正規化
                  posterior_prob /= sumxP_shifted;
             }
 
@@ -1784,60 +1355,37 @@ private:
 
     void Mstep(int l)
     {
-        // アクティブなパスの数
         int n_active = activePathIndices_.size();
-        if (n_active == 0) return; // 安全策
+        if (n_active == 0) return;
 
-        // 1. アクティブなパスに対応する W の部分行列を作成
         Eigen::MatrixXcd W_active(params_.K_, n_active);
         for(int i = 0; i < n_active; ++i) {
             W_active.col(i) = W_est_.col(activePathIndices_[i]);
         }
 
-        // 2. 縮小モデルでの h (サイズ: n_active x 1) の推定
-        // h_active = (W_active^H * R_moment * W_active)^-1 * (X_bar * W_active)^H * Y
         Eigen::MatrixXcd A = X_bar * W_active;
         Eigen::MatrixXcd B = W_active.adjoint() * R_moment * W_active;
         Eigen::VectorXcd h_active = B.inverse() * A.adjoint() * Y_.row(l).transpose();
 
-        // 3. 全体の h_l (サイズ: Q x 1) にマッピング（非アクティブは0にする）
         h_l.setZero();
         for(int i = 0; i < n_active; ++i) {
             h_l(activePathIndices_[i]) = h_active(i);
         }
 
-        // 4. 雑音分散の更新
-        // J = ||Y - X_bar * W * h||^2 + h^H * W^H * (R_moment - X_bar^H * X_bar) * W * h
         Eigen::VectorXcd Wh = W_active * h_active;
-        
-        // 第1項: 残差ノルム
         double term1 = (Y_.row(l).transpose() - X_bar * Wh).squaredNorm();
 
-        // 第2項: 推定誤差補正
         Eigen::MatrixXcd Cov_X = R_moment - X_bar.adjoint() * X_bar;
         double term2 = (Wh.adjoint() * Cov_X * Wh).value().real();
 
         noiseVariance_ = (term1 + term2) / (double)params_.K_;
         
-        // 数値安定性のための下限処理
         if (noiseVariance_ < 1e-10) noiseVariance_ = 1e-10;
     }
 
-    // void Mstep(int l)
-    // {
-    //     Eigen::MatrixXcd A = X_bar * W_est_;
-    //     h_l = (W_est_.adjoint() * R_moment * W_est_).inverse() * (X_bar * W_est_).adjoint() * Y_.row(l).transpose();
-    //     // std::cout << "h_l=" << h_l << std::endl;
-    //     // std::cout << "A=" << A << std::endl;
-    //     noiseVariance_ = ((Y_.row(l).transpose() - X_bar * W_est_ * h_l).squaredNorm() + ((W_est_ * h_l).adjoint() * (R_moment - X_bar.adjoint() * X_bar) * W_est_ * h_l).value().real()) / (double)params_.K_;
-    // }
-
-    /**
-     * 最尤復調
-     */
     void setRxDataByML()
     {
-        Eigen::VectorXd obj(params_.NUMBER_OF_SYMBOLS); // 最小化の目的関数
+        Eigen::VectorXd obj(params_.NUMBER_OF_SYMBOLS);
 
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
         {
@@ -1845,21 +1393,15 @@ private:
             {
                 for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++)
                 {
-                    // 最尤復調の周波数応答は推定値を使う？
                     obj(i) = std::norm((R_(l, k) - symbol_(i)));
                 }
-                Eigen::VectorXd::Index minColumn; // ノルムが最小な index（つまり受信データ）
+                Eigen::VectorXd::Index minColumn;
                 obj.minCoeff(&minColumn);
                 rxData_(l, k) = minColumn;
             }
         }
     }
 
-    /**
-     * ハミング距離計算
-     * @param 整数1，整数2
-     * @return ハミング距離
-     */
     int hammingDistance(int num1, int num2)
     {
         int ham = 0;
@@ -1878,4 +1420,4 @@ private:
     }
 };
 
-#endif
+#endif // RECEIVER_H
