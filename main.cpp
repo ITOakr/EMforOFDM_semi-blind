@@ -86,40 +86,59 @@ int main()
 	int mode_select = 0;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cout << "Select Simulation Mode" << std::endl;
-	std::cout << "1: Eb/N0 sweep (fixed Doppler)" << std::endl;
-	std::cout << "2: Doppler sweep (fixed Eb/N0)" << std::endl;
-    std::cout << "3: MSE Simulation" << std::endl;
-    std::cout << "4: Average Power Simulation" << std::endl;
-	std::cout << "5: only pilot Eb/N0 sweep (fixed Doppler)" << std::endl;
-	std::cout << "6: MSE Simulation pilot" << std::endl;
-	std::cout << "7: only pilot Doppler sweep (fixed Eb/N0)" << std::endl;
-	std::cout << "8: MSE Doppler sweep (fixed Eb/N0)" << std::endl;
-	std::cout << "9: MSE Doppler sweep only pilot (fixed Eb/N0)" << std::endl;
-	std::cout << "10: Channel Magnitude Response (|H(k, l)|) CSV Output" << std::endl;
-	std::cout << "11: Noise Variance MSE Doppler sweep (fixed Eb/N0)" << std::endl;
-	std::cout << "12: H MSE by initial h_est Doppler sweep (fixed Eb/N0)" << std::endl;
-	std::cout << "13: H MSE by initial H_est Doppler sweep (fixed Eb/N0)" << std::endl;
-	std::cout << "14: MSE vs Doppler sweep (parallel) (fixed Eb/N0)" << std::endl;
-	std::cout << "15: AIC Model Selection Accuracy vs Doppler (fixed Eb/N0)" << std::endl;
-	std::cout << "16: AIC Path Selection Accuracy vs Doppler (fixed Eb/N0)" << std::endl;
-    std::cout << "17: AIC F-Measure vs Doppler (fixed Eb/N0)" << std::endl;
-	std::cout << "18: Embedded AIC Method MSE vs Eb/N0" << std::endl;
-	std::cout << "19: Wrapper AIC Method SNR Degradation Ratio vs Doppler" << std::endl;
-	std::cout << "20: Pilot Only SNR Degradation Ratio vs Doppler" << std::endl;
-	std::cout << "21: Pilot AIC Fixed Path MSE vs Doppler" << std::endl;
-	std::cout << "23: Export Tx Waveform (k=10) vs Time" << std::endl;
-    std::cout << "24: Export Faded Tx Waveform (k=10) vs Time" << std::endl;
-	std::cout << "25: Export Channel Magnitude (|H|) (k=10) vs Time" << std::endl;
-	std::cout << "26: Frequency Response (|H(k)|) vs Subcarrier k (Fixed l)" << std::endl;
-	std::cout << "27: Impulse Response (|h(q)|) vs Path Index q (Fixed l)" << std::endl;
-	std::cout << "28: Export Estimated Impulse Response (l=0, Q=16) to CSV" << std::endl;
-	std::cout << "29: MSE vs Frame Length L Sweep (fixed Eb/N0 & Doppler)" << std::endl;
-	std::cout << "30: CRLB MSE vs Eb/N0 (fixed Doppler)" << std::endl;
-	std::cout << "31: Impulse Response (h) MSE Simulation vs Eb/N0" << std::endl;
+	std::cout << "1: BER vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "2: BER vs Doppler sweep (fixed Eb/N0)" << std::endl;
+    std::cout << "3: MSE vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+    std::cout << "4: Average power of the true channel response H" << std::endl;
+	std::cout << "5: BER vs Eb/N0 sweep for pilot-only mode (fixed Doppler)" << std::endl;
+	std::cout << "6: MSE vs Eb/N0 sweep for pilot-only mode (fixed Doppler)" << std::endl;
+	std::cout << "7: BER vs Doppler sweep for pilot-only mode (fixed Eb/N0)" << std::endl;
+	std::cout << "8: MSE vs Doppler sweep (fixed Eb/N0, 0 -> step -> double)" << std::endl;
+	std::cout << "9: MSE vs Doppler sweep for pilot-only mode (fixed Eb/N0, 0 -> step -> double)" << std::endl;
+	std::cout << "10: CSV output of channel magnitude response |H(k, l)|" << std::endl;
+	std::cout << "11: MSE of estimated noise variance vs Doppler sweep (fixed Eb/N0)" << std::endl;
+	std::cout << "12: MSE of h by initial h estimation vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "13: MSE of H by pilot estimation vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "14: Parallel MSE vs Doppler sweep (fixed Eb/N0)" << std::endl;
+	std::cout << "15: AIC model selection accuracy vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "16: AIC path selection accuracy vs Doppler (fixed Eb/N0)" << std::endl;
+    std::cout << "17: AIC path selection F-measure vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "18: Embedded AIC method MSE vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "19: Wrapper AIC method SNR degradation ratio vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "20: Pilot-only SNR degradation ratio vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "21: Pilot AIC fixed-path MSE vs Doppler (fixed Eb/N0)" << std::endl;
+	std::cout << "22: Unused" << std::endl;
+	std::cout << "23: Export transmit waveform X over time (k=10)" << std::endl;
+    std::cout << "24: Export faded waveform HX over time (k=10)" << std::endl;
+	std::cout << "25: Export channel magnitude |H| over time (k=10)" << std::endl;
+	std::cout << "26: Export frequency response |H(k, l)| along k for fixed l" << std::endl;
+	std::cout << "27: Export average impulse response along q for fixed l" << std::endl;
+	std::cout << "28: Export estimated impulse response (l=0, Q=16) to CSV" << std::endl;
+	std::cout << "29: Sweep frame length L and evaluate MSE (fixed Eb/N0 and Doppler)" << std::endl;
+	std::cout << "30: Sweep CRLB-based MSE vs Eb/N0 (fixed Doppler)" << std::endl;
+	std::cout << "31: Simulate impulse-response h MSE vs Eb/N0" << std::endl;
+	std::cout << "32: Known-model, known-noise ML validation (H MSE vs Eb/N0)" << std::endl;
+	std::cout << "33: Known-model, known-noise ML validation (H MSE at l=0 vs Eb/N0)" << std::endl;
+	std::cout << "34: Instantaneous SNR (gamma) mean vs Eb/N0 at (l,k)=(0,0)" << std::endl;
+	std::cout << "35: Instantaneous SNR (gamma) vs Eb/N0 at (l,k)=(0,0)" << std::endl;
+	std::cout << "36: Instantaneous SNR (gamma) vs Doppler at (l,k)=(0,0)" << std::endl;
+	std::cout << "37: MSE of h 16 paths by initial h estimation vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "38: MSE of Pilot Raghavendra AIC h vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "39: MSE of Pilot Raghavendra AIC H vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "40: MSE of Random Path Model AIC vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+	std::cout << "41: AIC Exhaustive Search (8 paths) Accuracy vs Eb/N0 sweep" << std::endl;
+	std::cout << "42: MSE of Random Path Model with Exhaustive Raghavendra AIC vs Eb/N0" << std::endl;
+	std::cout << "43: AIC Exhaustive Search (8 paths) MSE vs Eb/N0 sweep (Fixed Mask)" << std::endl;
+	std::cout << "44: Raghavendra AIC Exhaustive Search (8 paths) MSE vs Eb/N0 sweep (Fixed Mask)" << std::endl;
+	std::cout << "45: MSE of Raghavendra AIC update vs Eb/N0 (Fixed Mask)" << std::endl;
+	std::cout << "46: MSE of Random Path Model with Known Mask vs Eb/N0" << std::endl;
+	std::cout << "47: AIC vs Raghavendra GAIC comparison (Single Trial)" << std::endl;
+	std::cout << "48: AIC vs Raghavendra GAIC comparison (Average over Trials)" << std::endl;
+	std::cout << "49: MSE of h by initial h estimation with Raghavendra GAIC vs Eb/N0 sweep (fixed Doppler)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
-    std::cout << "Enter number of trials:" ;
+	std::cout << "Enter number of trials:" ;
 	std::cin >> numberOfTrials;
 	sim.setTrialNum(numberOfTrials);
 
@@ -197,7 +216,7 @@ int main()
     {
         // --- モード4: 平均電力計算 ---
         double dopplerFrequency;
-        std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
         std::cin >> dopplerFrequency;
 
         sim.setDopplerFrequency(dopplerFrequency);
@@ -205,8 +224,8 @@ int main()
         avgPower = sim.getAveragePower_simulation();
         
         std::cout << "--------------------------------------------------------------------" << std::endl;
-        std::cout << "Average power of the true channel response H over " << numberOfTrials << " trials." << std::endl;
-        std::cout << "f_d*T_s = " << dopplerFrequency << ", Average Power = " << avgPower << std::endl;
+		std::cout << "Average power of the true channel response H over " << numberOfTrials << " trials." << std::endl;
+		std::cout << "f_d*T_s = " << dopplerFrequency << ", Average Power = " << avgPower << std::endl;
         std::cout << "--------------------------------------------------------------------" << std::endl;
 
         // このモードではファイル出力はせず、コンソール表示のみとします。
@@ -469,14 +488,14 @@ int main()
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         
         std::cout << "========================================" << std::endl;
-        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+		std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
         std::cout << "========================================" << std::endl;
 	}
 	else if (mode_select == 15)
     {
         // --- モード15: AICモデル選択正答率 vs ドップラー周波数 ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
         std::cin >> fixedEbN0dB;
 
         fileName = outputDir + timeStr + "_" + modulationName + "EbN0_" + std::to_string(fixedEbN0dB) + "_AIC_Model_Accuracy_vs_Doppler.csv";
@@ -506,7 +525,7 @@ int main()
     {
         // --- モード16: 正答率 (Accuracy) のみ出力 ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
         std::cin >> fixedEbN0dB;
 
         // ファイル名に Accuracy を明記
@@ -537,7 +556,7 @@ int main()
     {
         // --- モード17: F値 (F-Measure) のみ出力 ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
+		std::cout << "Enter fixed Eb/N0 [dB]:" << std::endl;
         std::cin >> fixedEbN0dB;
 
         // ファイル名に F_Measure を明記
@@ -568,7 +587,7 @@ int main()
     {
         // --- モード18: 埋め込み法 MSE vs Doppler (Eb/N0固定) ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
         std::cin >> fixedEbN0dB;
 
         // ファイル名を変更
@@ -602,14 +621,14 @@ int main()
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         
         std::cout << "========================================" << std::endl;
-        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+		std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
         std::cout << "========================================" << std::endl;
     }
 	else if (mode_select == 19)
     {
         // --- モード19: Wrapper法 SNR劣化比 (Degradation Ratio) vs Doppler ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
         std::cin >> fixedEbN0dB;
 
         fileName = outputDir + timeStr + "_" + modulationName + "_WrapperAIC_SNRDegradation.csv";
@@ -624,12 +643,12 @@ int main()
         for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
             sim.setDopplerFrequency(dopplerFrequency);
             
-            std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
+			std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
             
             // Wrapper法でのSNR劣化比シミュレーション
             double degradation = sim.getSNRDegradation_WrapperAIC_Simulation();
 
-            std::cout << " Result: Ratio = " << degradation << " (1.0 is Ideal)" << std::endl;
+			std::cout << " Result: Ratio = " << degradation << " (1.0 is Ideal)" << std::endl;
             ofs << dopplerFrequency << "," << degradation << std::endl;
 
             // ドップラー周波数の更新
@@ -642,14 +661,14 @@ int main()
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         
         std::cout << "========================================" << std::endl;
-        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+		std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
         std::cout << "========================================" << std::endl;
     }
 	else if (mode_select == 20)
     {
         // --- モード20: Pilot Only SNR劣化比 (Degradation Ratio) vs Doppler ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
         std::cin >> fixedEbN0dB;
 
         fileName = outputDir + timeStr + "_" + modulationName + "_PilotOnly_SNRDegradation.csv";
@@ -665,12 +684,12 @@ int main()
         for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
             sim.setDopplerFrequency(dopplerFrequency);
             
-            std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
+			std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
             
             // パイロットのみでのSNR劣化比シミュレーション
             double degradation = sim.getSNRDegradation_PilotOnly_Simulation();
 
-            std::cout << " Result: Ratio = " << degradation << " (1.0 is Ideal)" << std::endl;
+			std::cout << " Result: Ratio = " << degradation << " (1.0 is Ideal)" << std::endl;
             ofs << dopplerFrequency << "," << degradation << std::endl;
 
             // ドップラー周波数の更新
@@ -686,14 +705,14 @@ int main()
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         
         std::cout << "========================================" << std::endl;
-        std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+		std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
         std::cout << "========================================" << std::endl;
     }
 	else if (mode_select == 21)
     {
         // --- モード21: パイロットAIC固定パス法 MSE ---
         int fixedEbN0dB;
-        std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
         std::cin >> fixedEbN0dB;
 
         fileName = outputDir + timeStr + "_" + modulationName + "_PilotAICFixed_MSE.csv";
@@ -704,11 +723,11 @@ int main()
 
         for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
             sim.setDopplerFrequency(dopplerFrequency);
-            std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
+			std::cout << "Target: f_dT_s = " << dopplerFrequency << " processing..." << std::endl;
 
             double mse = sim.getMSE_PilotAICFixedPath_Simulation();
 
-            std::cout << " Result: MSE = " << mse << std::endl;
+			std::cout << " Result: MSE = " << mse << std::endl;
             ofs << dopplerFrequency << "," << mse << std::endl;
 
             if (dopplerFrequency == 0.0) dopplerFrequency = dopplerStep;
@@ -716,7 +735,7 @@ int main()
         }
         auto end_total = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_total = end_total - start_total;
-        std::cout << "Total Time: " << elapsed_total.count() << "s" << std::endl;
+		std::cout << "Total Time: " << elapsed_total.count() << "s" << std::endl;
     }
 	else if (mode_select == 23)
     {
@@ -729,7 +748,7 @@ int main()
         // ターゲットサブキャリア
         int target_k = 10;
         
-        std::cout << "Exporting Tx Signal for k=" << target_k << " ..." << std::endl;
+		std::cout << "Exporting Tx Signal for k=" << target_k << " ..." << std::endl;
         sim.runExportTxWaveform(target_k, fileName);
     }
     else if (mode_select == 24)
@@ -738,7 +757,7 @@ int main()
         
         // 動き（ドップラー）を設定させたい場合は入力を受け付ける
         double inputDoppler;
-        std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
         std::cin >> inputDoppler;
         
         sim.setDopplerFrequency(inputDoppler);
@@ -748,31 +767,31 @@ int main()
         // ターゲットサブキャリア
         int target_k = 10;
 
-        std::cout << "Exporting Faded Signal for k=" << target_k << " ..." << std::endl;
+		std::cout << "Exporting Faded Signal for k=" << target_k << " ..." << std::endl;
         sim.runExportFadedWaveform(target_k, fileName);
     }
 	else if (mode_select == 25)
     {
         // --- モード25: チャネル応答 |H| の出力 ---
         double inputDoppler;
-        std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
         std::cin >> inputDoppler;
         sim.setDopplerFrequency(inputDoppler);
 
         int target_k;
-        std::cout << "Enter target subcarrier index (k): ";
+		std::cout << "Enter target subcarrier index (k): ";
         std::cin >> target_k; // ターミナルからkを入力
 
         fileName = outputDir + timeStr + "_" + modulationName + "_ChannelMagnitude_k" + std::to_string(target_k) + ".csv";
         
-        std::cout << "Exporting Channel Magnitude for k=" << target_k << " ..." << std::endl;
+		std::cout << "Exporting Channel Magnitude for k=" << target_k << " ..." << std::endl;
         sim.runExportChannelMagnitude(target_k, fileName);
     }
 	else if (mode_select == 26)
 	{
 		// --- モード26: 横軸kの周波数応答 ---
 		double inputDoppler;
-		std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
 		std::cin >> inputDoppler;
 		sim.setDopplerFrequency(inputDoppler);
 
@@ -790,7 +809,7 @@ int main()
 	{
 		// --- モード27: 平均インパルス応答 vs q ---
 		double inputDoppler;
-		std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
 		std::cin >> inputDoppler;
 		sim.setDopplerFrequency(inputDoppler);
 
@@ -810,12 +829,12 @@ int main()
 	{
 		// --- モード28: 推定インパルス応答の出力 ---
 		double inputDoppler;
-		std::cout << "Enter Normalized Doppler Frequency (f_d T_s): ";
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
 		std::cin >> inputDoppler;
 		sim.setDopplerFrequency(inputDoppler);
 
 		int fixedEbN0dB;
-		std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
 		std::cin >> fixedEbN0dB;
 		sim.setNoiseSD(fixedEbN0dB);
 
@@ -825,17 +844,17 @@ int main()
 		std::cout << "Exporting Estimated Impulse Response (l=0, Q=16)..." << std::endl;
 		sim.saveEstimatedImpulseResponseToCSV(ofs, inputDoppler);
 
-		std::cout << "Successfully saved to: " << fileName << std::endl;
+		std::cout << "Saved to: " << fileName << std::endl;
 	}
 	else if (mode_select == 29)
 	{
 		// --- モード29: フレーム長 L スイープ ---
 		int fixedEbN0dB;
-		std::cout << "Enter fixed Eb/N0 [dB]: ";
+		std::cout << "Enter fixed Eb/N0 [dB]:";
 		std::cin >> fixedEbN0dB;
 
 		double dopplerFrequency;
-		std::cout << "Enter normalized Doppler f_d*T_s: ";
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
 		std::cin >> dopplerFrequency;
 
 		int L_start, L_end, L_step;
@@ -917,6 +936,458 @@ int main()
 			ofs << EbN0dB << "," << mse << std::endl;
 		}
 	}
+	else if (mode_select == 32)
+	{
+		// --- モード32: 真のパスモデルと既知雑音分散での ML 推定の検証 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_KnownModelKnownNoise_HMSE_vs_EbN0.csv";
+		ofs.open(fileName);
+		ofs << "EbN0dB,H_MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double H_mse = sim.get_H_MSE_with_known_model_and_noise_during_pilot();
+
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", H_MSE = " << H_mse << std::endl;
+			ofs << EbN0dB << "," << H_mse << std::endl;
+		}
+	}
+	else if (mode_select == 33)
+	{
+		// --- モード33: 真のパスモデルと既知雑音分散での ML 推定の検証 先頭シンボル分 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_KnownModelKnownNoise_HMSE_vs_EbN0.csv";
+		ofs.open(fileName);
+		ofs << "EbN0dB,H_MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double H_mse = sim.get_H_MSE_with_known_model_and_noise_at_l0();
+
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", H_MSE = " << H_mse << std::endl;
+			ofs << EbN0dB << "," << H_mse << std::endl;
+		}
+	}
+	else if (mode_select == 34)
+	{
+		// --- モード34: 瞬時信号対雑音電力比 γ(ΔH) の平均を Eb/N0 スイープで出力 ---
+		double dopplerFrequency;
+		double gamma_mean;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_Gamma_vs_EbN0_MODE34.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			gamma_mean = sim.getInstantaneousSNR_Mode34_simulation();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", Mean Gamma(l=0,k=0) = " << gamma_mean << std::endl;
+			ofs << EbN0dB << "," << gamma_mean << std::endl;
+		}
+	}
+	else if (mode_select == 35)
+	{
+		// --- モード35: 瞬時信号対雑音電力比 γ(ΔH) の平均を Eb/N0 スイープで出力 ---
+		double dopplerFrequency;
+		double gamma_mean;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_Gamma_vs_EbN0_MODE35.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			gamma_mean = sim.getInstantaneousSNR_Mode35_simulation();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", Mean Gamma(l=0,k=0) = " << gamma_mean << std::endl;
+			ofs << EbN0dB << "," << gamma_mean << std::endl;
+		}
+	}
+	else if (mode_select == 36)
+	{
+		// --- モード36: 瞬時信号対雑音電力比 γ(ΔH) の平均を Eb/N0 スイープで出力 ---
+		double dopplerFrequency;
+		double gamma_mean;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_Gamma_vs_EbN0_MODE36.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			gamma_mean = sim.getInstantaneousSNR_Mode36_simulation();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", Mean Gamma(l=0,k=0) = " << gamma_mean << std::endl;
+			ofs << EbN0dB << "," << gamma_mean << std::endl;
+		}
+	}
+	else if (mode_select == 37)
+	{
+		// --- モード37: 16パスあると仮定してインパルス応答を推定 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_16Paths_HMSE_vs_EbN0.csv";
+		ofs.open(fileName);
+		ofs << "EbN0dB,H_MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double H_mse = sim.get_H_MSE_with_16paths_during_pilot();
+
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", H_MSE = " << H_mse << std::endl;
+			ofs << EbN0dB << "," << H_mse << std::endl;
+		}
+	}
+	else if (mode_select == 38)
+	{
+		// --- モード38: Raghavendraの提案するAICによるモデル選択 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_RaghavendraAIC_MSE_vs_EbN0.csv";
+		ofs.open(fileName);
+		ofs << "EbN0dB,H_MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double H_mse = sim.get_H_MSE_with_RaghavendraAIC_during_pilot();
+
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", H_MSE = " << H_mse << std::endl;
+			ofs << EbN0dB << "," << H_mse << std::endl;
+		}
+	}
+	else if (mode_select == 39)
+	{
+		// --- モード39: 16パス推定時の平均インパルス応答電力 (l=0) ---
+		double inputDoppler;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> inputDoppler;
+		sim.setDopplerFrequency(inputDoppler);
+
+		int fixedEbN0dB;
+		std::cout << "Enter fixed Eb/N0 [dB]:";
+		std::cin >> fixedEbN0dB;
+		sim.setNoiseSD(fixedEbN0dB);
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_EbN0_" + std::to_string(fixedEbN0dB) + "_16Paths_AverageImpulseResp_q.csv";
+		
+		std::cout << "Exporting Average Estimated Impulse Response Power (16 paths, l=0)..." << std::endl;
+		sim.saveAverageEstimatedImpulseResponseByQ_16paths(fileName);
+		
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 40)
+	{
+		// --- モード40: ランダムパスモデルによる平均MSE (Mode 12ベース) ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_RandomPath_MSE_MODE40.csv";
+		ofs.open(fileName);
+
+		std::cout << "Starting Random Path MSE Simulation (Mode 40)..." << std::endl;
+		std::cout << "Eb/N0 [dB], MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double mse = sim.getMSE_RandomPath_Mode12_Simulation();
+
+			std::cout << EbN0dB << ", " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
+
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 41)
+	{
+		// --- モード41: AIC 8パス総当たり正答率の検証 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_ExhaustiveAIC8_Accuracy_EbN0.csv";
+		ofs.open(fileName);
+
+		std::cout << "Starting Exhaustive AIC (8 paths) Accuracy Simulation (Mode 41)..." << std::endl;
+		std::cout << "Eb/N0 [dB], Accuracy" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double accuracy = sim.getExhaustiveAICAccuracy_8paths_Simulation();
+
+			std::cout << EbN0dB << ", " << accuracy << std::endl;
+			ofs << EbN0dB << "," << accuracy << std::endl;
+		}
+
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 42)
+	{
+		// --- モード42: ランダムパスモデルによる平均MSE (Raghavendra AIC 全探索) ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_RandomPath_MSE_MODE42_Raghavendra.csv";
+		ofs.open(fileName);
+
+		std::cout << "Starting Random Path MSE Simulation with Raghavendra AIC (Mode 42)..." << std::endl;
+		std::cout << "Eb/N0 [dB], MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double mse = sim.getMSE_RandomPath_RaghavendraAIC_Simulation();
+
+			std::cout << EbN0dB << ", " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
+
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 43)
+	{
+		// --- モード43: AIC 8パス総当たりによる固定マスクMSEの検証 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_ExhaustiveAIC8_FixedMask_MSE_EbN0.csv";
+		ofs.open(fileName);
+
+		std::cout << "Starting Exhaustive AIC (8 paths) Fixed Mask MSE Simulation (Mode 43)..." << std::endl;
+		std::cout << "Eb/N0 [dB], MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double mse = sim.getMSE_ExhaustiveAIC_8paths_fixedMask_Simulation();
+
+			std::cout << EbN0dB << ", " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
+
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 44)
+	{
+		// --- モード44: Raghavendra AIC 8パス総当たりによる固定マスクMSEの検証 ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_ExhaustiveRaghavendraAIC8_FixedMask_MSE_EbN0.csv";
+		ofs.open(fileName);
+
+		std::cout << "Starting Exhaustive Raghavendra AIC (8 paths) Fixed Mask MSE Simulation (Mode 44)..." << std::endl;
+		std::cout << "Eb/N0 [dB], MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double mse = sim.getMSE_ExhaustiveRaghavendraAIC_8paths_fixedMask_Simulation();
+
+			std::cout << EbN0dB << ", " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
+
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 45)
+	{
+		// --- モード45: ランダムパスモデルによる平均MSE (Raghavendra AIC 改訂版) ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_RandomPath_MSE_MODE45_Raghavendra.csv";
+		ofs.open(fileName);
+
+		std::cout << "Starting Random Path MSE Simulation with Raghavendra AIC (Mode 45)..." << std::endl;
+		std::cout << "Eb/N0 [dB], MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double mse = sim.getMSE_RandomPath_RaghavendraAIC_Simulation2();
+
+			std::cout << EbN0dB << ", " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
+
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 46)
+	{
+		// --- モード46: ランダムパスモデルによる平均MSE (真のパスマスク既知) ---
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_RandomPath_MSE_MODE46_KnownMask.csv";
+		ofs.open(fileName);
+
+		std::cout << "Starting Random Path MSE Simulation with Known Mask (Mode 46)..." << std::endl;
+		std::cout << "Eb/N0 [dB], MSE" << std::endl;
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+
+			double mse = sim.getMSE_RandomPath_KnownMask_Simulation();
+
+			std::cout << EbN0dB << ", " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
+
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 47)
+	{
+		// --- モード47: AIC vs Raghavendra GAIC (単一試行) ---
+		double dopplerFrequency, fixedEbN0dB;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> dopplerFrequency;
+		std::cout << "Enter fixed Eb/N0 [dB] for this trial:";
+		std::cin >> fixedEbN0dB;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_EbN0=" + std::to_string(fixedEbN0dB) + "_AIC_vs_GAIC_SingleTrial_MODE47.csv";
+		ofs.open(fileName);
+
+		std::cout << "Running AIC vs Raghavendra GAIC Single Trial Simulation (Mode 47)..." << std::endl;
+		std::cout << "Q, AIC, Raghavendra_GAIC" << std::endl;
+		ofs << "Q,AIC,Raghavendra_GAIC" << std::endl;
+
+		auto [aic, gaic] = sim.getAICvsQ_SingleTrial_Simulation(dopplerFrequency, fixedEbN0dB);
+
+		for (size_t q = 0; q < aic.size(); ++q) {
+			std::cout << (q + 1) << ", " << aic[q] << ", " << gaic[q] << std::endl;
+			ofs << (q + 1) << "," << aic[q] << "," << gaic[q] << std::endl;
+		}
+
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 48)
+	{
+		// --- モード48: AIC vs Raghavendra GAIC (複数回平均) ---
+		double dopplerFrequency, fixedEbN0dB;
+		std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+		std::cin >> dopplerFrequency;
+		std::cout << "Enter fixed Eb/N0 [dB] for average simulation:";
+		std::cin >> fixedEbN0dB;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_EbN0=" + std::to_string(fixedEbN0dB) + "_AIC_vs_GAIC_Average_MODE48.csv";
+		ofs.open(fileName);
+
+		std::cout << "Running AIC vs Raghavendra GAIC Average Simulation (" << numberOfTrials << " trials) (Mode 48)..." << std::endl;
+		std::cout << "Q, Average_AIC, Average_Raghavendra_GAIC" << std::endl;
+		ofs << "Q,Average_AIC,Average_Raghavendra_GAIC" << std::endl;
+
+		auto [avg_aic, avg_gaic] = sim.getAICvsQ_Average_Simulation(dopplerFrequency, fixedEbN0dB);
+
+		for (size_t q = 0; q < avg_aic.size(); ++q) {
+			std::cout << (q + 1) << ", " << avg_aic[q] << ", " << avg_gaic[q] << std::endl;
+			ofs << (q + 1) << "," << avg_aic[q] << "," << avg_gaic[q] << std::endl;
+		}
+
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 49)
+	{
+		// --- モード49: Eb/N0スイープ, Raghavendra GAICを用いたh_est_MSEの確認 ---
+		// 電力ソート法
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_MSE_vs_EbN0_pilot_h_est_MODE49_RaghavendraGAIC.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			mse = sim.get_h_MSE_Simulation_during_pilot_RaghavendraGAIC();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
+	}
+
 	else
 	{
 		std::cout << "Invalid mode selected." << std::endl;

@@ -40,6 +40,40 @@ public:
     }
 
     /**
+     * @brief ランダムなパス構成で周波数応答を生成する (Mode 40用)
+     * @param fd_Ts 正規化ドップラー周波数
+     * @param dist 乱数生成器 (0 or 1)
+     */
+    void generateRandomPathFrequencyResponse(double fd_Ts, uniform_int_distribution<>& dist)
+    {
+        double totalPower = 0.0;
+        // 1. パスの有無をランダムに決定し、未正規化の電力を計算
+        do {
+            totalPower = 0.0;
+            for (int q = 0; q < params_.Q_; q++) {
+                if (dist() == 1) { // 50%の確率
+                    xi_(q) = std::pow(10.0, -0.1 * q);
+                    totalPower += xi_(q);
+                } else {
+                    xi_(q) = 0.0;
+                }
+            }
+        } while (totalPower == 0); // 万が一全パス0になった場合は再生成
+
+        // 2. 合計電力を1.0に正規化
+        for (int q = 0; q < params_.Q_; q++) {
+            xi_(q) /= totalPower;
+        }
+
+        // 3. 既存の生成ロジックを実行
+        fd_Ts_ = fd_Ts;
+        seth_(); // 内部で xi_ を使用してインパルス応答 h_ を生成
+        for (int l = 0; l < params_.L_; l++) {
+            H_.row(l) = (W_ * h_.row(l).transpose()).transpose(); // 周波数応答 H_ を生成
+        }
+    }
+
+    /**
      * @brief 1フレーム分のH_の平均電力を計算する
      * @return double 平均電力
      */
@@ -61,6 +95,14 @@ public:
 
     // 遅延プロファイルのゲッター関数
     const Eigen::VectorXd& getXi() const { return xi_; }
+
+    /**
+     * @brief params_.pathMask に基づいて遅延プロファイルを更新する
+     */
+    void updateProfile()
+    {
+        setChannelProfile();
+    }
 
 private:
     const SimulationParameters &params_;

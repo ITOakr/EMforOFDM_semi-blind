@@ -23,8 +23,8 @@ public:
     Simulator(const SimulationParameters &params)
         : params_(params),
         W_master_(SimulationParameters::generateW(params.K_, params.Q_, params.NUMBER_OF_FFT)),
-        channel_(params, W_master_),
-        transceiver_(params, W_master_)
+        channel_(params_, W_master_),
+        transceiver_(params_, W_master_)
     {
     }
 
@@ -309,6 +309,109 @@ public:
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
     }
 
+    double get_h_MSE_Simulation_during_pilot_RaghavendraGAIC()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+            transceiver_.est_H_by_initial_h_RaghavendraGAIC(); // GAICによる推定
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 試行回数、データシンボル数、サブキャリア数で平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * Mode34: 瞬時信号対雑音電力比 γ(ΔH) の平均を計算するシミュレーション
+     * - スウィープは外側の main で行うため、ここでは1つの設定(noiseSD_, fd_Ts_)で
+     *   NUMBER_OF_TRIAL 回試行し、(l,k)=(0,0) の γ を平均して返す。
+     */
+    double getInstantaneousSNR_Mode34_simulation()
+    {
+        double totalGamma = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // Hの推定は mode12 を参考にして初期推定(hによる推定)を使う
+            transceiver_.est_H_by_initial_h();
+
+            // ΔH を計算 (定義: H_est - H_true)
+            Eigen::RowVectorXcd delta = transceiver_.computeDeltaHRow(0);
+
+            // γ を計算し、(k=0) を取り出す
+            Eigen::VectorXd gamma_vec = transceiver_.computeGammaFromDeltaH(delta, 0, noiseSD_, 1.0, -1.0, true);
+            double gamma_k0 = 0.0;
+            if (gamma_vec.size() > 0) gamma_k0 = gamma_vec(0);
+
+            totalGamma += gamma_k0;
+        }
+
+        return totalGamma / (double)NUMBER_OF_TRIAL;
+    }
+
+    /**
+     * Mode35: 瞬時信号対雑音電力比 γ(ΔH) の平均を計算するシミュレーション
+     * - スウィープは外側の main で行うため、ここでは1つの設定(noiseSD_, fd_Ts_)で
+     *   NUMBER_OF_TRIAL 回試行し、(l,k)=(0,0) の γ を平均して返す。
+     */
+    double getInstantaneousSNR_Mode35_simulation()
+    {
+        double totalGamma = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 写真の x = -H/A を delta に入力する
+            // (l,k)=(0,0) を対象にするので、まずは行ベクトルを作って k=0 成分を使う
+            Eigen::RowVectorXcd delta = transceiver_.computeDeltaRowFromPhotoX(0, noiseSD_);
+
+            // γ を計算し、(k=0) を取り出す
+            Eigen::VectorXd gamma_vec = transceiver_.computeGammaFromDeltaH(delta, 0, noiseSD_, 1.0, -1.0, true);
+            double gamma_k0 = 0.0;
+            if (gamma_vec.size() > 0) gamma_k0 = gamma_vec(0);
+
+            totalGamma += gamma_k0;
+        }
+
+        return totalGamma / (double)NUMBER_OF_TRIAL;
+    }
+
+    /**
+     * Mode36: 瞬時信号対雑音電力比 γ(ΔH) の平均を計算するシミュレーション
+     * - スウィープは外側の main で行うため、ここでは1つの設定(noiseSD_, fd_Ts_)で
+     *   NUMBER_OF_TRIAL 回試行し、(l,k)=(0,0) の γ を平均して返す。
+     */
+    double getInstantaneousSNR_Mode36_simulation()
+    {
+        double totalGamma = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // γ を計算し、(k=0) を取り出す
+            Eigen::VectorXd gamma_vec = transceiver_.computeGamma_78(0, noiseSD_, 1.0, -1.0, true);
+            double gamma_k0 = 0.0;
+            if (gamma_vec.size() > 0) gamma_k0 = gamma_vec(0);
+
+            totalGamma += gamma_k0;
+        }
+
+        return totalGamma / (double)NUMBER_OF_TRIAL;
+    }
+
     double get_H_est_MSE_Simulation_during_pilot()
     {
         double totalSquaredError = 0.0;
@@ -322,6 +425,98 @@ public:
         }
         // 試行回数、データシンボル数、サブキャリア数で平均化
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * 真のパスモデルと既知の雑音分散を使った ML 推定の H のMSE を計算する
+     * @return 周波数応答HのMSE
+     */
+    double get_H_MSE_with_known_model_and_noise_during_pilot()
+    {
+        double total_H_squared_error = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            transceiver_.est_H_by_known_model_and_noise(noiseSD_ * noiseSD_);
+
+            total_H_squared_error += transceiver_.getMSE_during_pilot();
+        }
+
+        double H_mse = total_H_squared_error / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+        return H_mse;
+    }
+
+    /**
+     * パスモデルがわからないが16パスあると仮定してインパルス応答を推定する方法の H のMSE を計算する
+     * @return 周波数応答HのMSE
+     */
+    double get_H_MSE_with_16paths_during_pilot()
+    {
+        double total_H_squared_error = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            transceiver_.est_H_by_16paths();
+
+            total_H_squared_error += transceiver_.getMSE_during_pilot();
+        }
+
+        double H_mse = total_H_squared_error / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+        return H_mse;
+    }
+
+    /**
+     * Raghavendraの論文で提案されているAICでモデル選択をした場合の推定
+     * @return 周波数応答HのMSE
+     */
+    double get_H_MSE_with_RaghavendraAIC_during_pilot()
+    {
+        double total_H_squared_error = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            transceiver_.est_H_by_RaghavendraAIC();
+
+            total_H_squared_error += transceiver_.getMSE_during_pilot();
+        }
+
+        double H_mse = total_H_squared_error / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+        return H_mse;
+    }
+
+    /**
+     * 真のパスモデルと既知の雑音分散を使った ML 推定の H のMSE をフレーム先頭 (l=0) のみで計算する
+     * @return 周波数応答HのMSE (l=0)
+     */
+    double get_H_MSE_with_known_model_and_noise_at_l0()
+    {
+        double total_H_squared_error = 0.0;
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            transceiver_.est_H_by_known_model_and_noise(noiseSD_ * noiseSD_);
+
+            total_H_squared_error += transceiver_.getMSE_at_l0();
+        }
+
+        double H_mse = total_H_squared_error / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+        return H_mse;
     }
 
     /**
@@ -756,6 +951,60 @@ void saveAverageImpulseResponseByQ(int target_l, const std::string& filename)
 }
 
 /**
+ * [Mode 39] 16パス推定時の平均インパルス応答電力 (l=0) を横軸 q で出力
+ */
+void saveAverageEstimatedImpulseResponseByQ_16paths(const std::string& filename)
+{
+    // 各パスの推定電力を蓄積するベクトル
+    std::vector<double> avg_power_q(params_.Q_, 0.0);
+
+    std::cout << "Calculating average ESTIMATED impulse response (16 paths) over " << NUMBER_OF_TRIAL << " trials..." << std::endl;
+
+    for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+    {
+        transceiver_.setX_();
+        channel_.generateFrequencyResponse(fd_Ts_);
+        transceiver_.setY_(channel_.getH(), noiseSD_);
+
+        // 16パス推定を実行 (パイロット区間 l=0, 1 を使用)
+        transceiver_.est_H_by_16paths();
+
+        // 推定されたパス係数ベクトルを取得
+        Eigen::VectorXcd h_est = transceiver_.getEstimatedPathCoefficients();
+
+        for (int q = 0; q < params_.Q_; q++)
+        {
+            // 推定値の電力を加算
+            double power = std::norm(h_est(q)); 
+            avg_power_q[q] += power;
+        }
+
+        // 進捗表示
+        if (NUMBER_OF_TRIAL >= 10 && ((tri + 1) % (NUMBER_OF_TRIAL / 10) == 0)) {
+            std::cout << "\rProgress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+        }
+    }
+    std::cout << std::endl;
+
+    // CSVファイルへ出力
+    std::ofstream ofs(filename);
+    if (!ofs) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        return;
+    }
+    ofs << "q,AveragePower,AverageMagnitude,Power_dB" << std::endl;
+
+    for (int q = 0; q < params_.Q_; q++)
+    {
+        double mean_power = avg_power_q[q] / (double)NUMBER_OF_TRIAL;
+        double mean_magnitude = std::sqrt(mean_power);
+        double power_db = 10.0 * std::log10(mean_power + 1e-20);
+
+        ofs << q << "," << mean_power << "," << mean_magnitude << "," << power_db << std::endl;
+    }
+    ofs.close();
+}
+/**
  * [Mode 28] パイロット区間 (l=0) における推定インパルス応答の保存
  */
 void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
@@ -853,8 +1102,8 @@ void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
         // 1. ノイズ分散 σ^2
         double noiseVar = noiseSD_ * noiseSD_;
         
-        // 2. パイロット電力の総和 K * P_x (今回は P_x = 1 として K_ になる)
-        double sum_X_sq = (double)params_.K_; 
+        // 2. パイロット電力の総和 K * P_x (今回は P_x = 1 として パイロットシンボルを2つ使う場合と比較するため，2.0倍している)
+        double sum_X_sq = (double)params_.K_ * (double)params_.NUMBER_OF_PILOT; 
 
         // 3. 推定対象のパス数 (Q) をカウントする
         int active_paths = 0;
@@ -887,18 +1136,339 @@ void saveEstimatedImpulseResponseToCSV(std::ofstream& ofs, double fd_Ts) {
             
             // 1. 真のインパルス応答行列 (L x Q) を取得
             const Eigen::MatrixXcd& h_true_matrix = channel_.get_h();
-            // パイロットシンボル(l=0)の真のインパルス応答ベクトル (Q x 1)
+            // パイロット1つ目と2つ目の真のインパルス応答ベクトル (Q x 1)
             Eigen::VectorXcd h_true_l0 = h_true_matrix.row(0).transpose();
+            Eigen::VectorXcd h_true_l1 = h_true_matrix.row(1).transpose();
 
             // 2. 推定されたインパルス応答ベクトル (Q x 1) を取得
             Eigen::VectorXcd h_est = transceiver_.getEstimatedPathCoefficients();
 
-            // 3. インパルス応答の二乗誤差を計算
-            totalSquaredError += (h_true_l0 - h_est).squaredNorm();
+            // 3. 2つのパイロットに対するインパルス応答の二乗誤差を計算して平均する
+            double mse_pilot_0 = (h_true_l0 - h_est).squaredNorm();
+            double mse_pilot_1 = (h_true_l1 - h_est).squaredNorm();
+            totalSquaredError += (mse_pilot_0 + mse_pilot_1) / 2.0;
         }
         
         // 試行回数とパス数(Q)で平均化
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.Q_);
+    }
+
+    /**
+     * @brief 各試行でランダムなパス構成を生成し、平均MSEを計算する (Mode 40用)
+     * @return 平均MSE
+     */
+    double getMSE_RandomPath_Mode12_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed); // 0 or 1 を生成
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            // ランダムなパス構成でチャネルを生成
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 推定（Mode 12ベース: AICによる初期推定）
+            transceiver_.est_H_by_initial_h();
+
+            // MSEの累積（パイロット区間のMSEを使用）
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * Mode 42: ランダムパスモデルによる平均MSE (Raghavendra AIC を全探索で適用)
+     */
+    double getMSE_RandomPath_RaghavendraAIC_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed); // 0 or 1 を生成
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            // ランダムなパス構成でチャネルを生成
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // Raghavendra AIC による初期推定
+            transceiver_.est_H_by_RaghavendraAIC();
+
+            // MSE の蓄積（パイロット区間の平均を使う）
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * Mode 42: ランダムパスモデルによる平均MSE (Raghavendra AIC を全探索で適用)
+     */
+    double getMSE_RandomPath_RaghavendraAIC_Simulation2()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed); // 0 or 1 を生成
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            // ランダムなパス構成でチャネルを生成
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // Raghavendra AIC による初期推定
+            transceiver_.est_H_by_RaghavendraAIC2();
+
+            // MSE の蓄積（パイロット区間の平均を使う）
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * ステップ 2: AIC 8パス総当たりによるモデル選択正答率のシミュレーション
+     * @return 正答率 (0.0 ~ 1.0)
+     */
+    double getExhaustiveAICAccuracy_8paths_Simulation()
+    {
+        int successCount = 0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed);
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            // 1. チャネル生成の制限: インデックス 0〜7 のみランダム、8〜15 は常に 0 に固定
+            std::vector<int> true_mask_8(8);
+            bool all_zero = true;
+            for (int q = 0; q < params_.Q_; q++) {
+                if (q < 8) {
+                    int val = dist();
+                    params_.pathMask[q] = val;
+                    true_mask_8[q] = val;
+                    if (val == 1) all_zero = false;
+                } else {
+                    params_.pathMask[q] = 0;
+                }
+            }
+
+            // 総当たり探索は i=1 から開始するため、真のモデルも少なくとも1つのパスを持つ必要がある
+            if (all_zero) {
+                int force_idx = tri % 8; // 決定的に1つ選ぶ
+                params_.pathMask[force_idx] = 1;
+                true_mask_8[force_idx] = 1;
+            }
+
+            // 2. プロファイル更新と信号生成
+            channel_.updateProfile();
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 3. 総当たり探索の実行 (Step 1 で実装したメソッド)
+            std::vector<int> est_mask_8 = transceiver_.findBestMaskByExhaustiveAIC_8paths();
+
+            // 4. 正解判定: 最初の8要素が完全に一致するか
+            if (est_mask_8 == true_mask_8) {
+                successCount++;
+            }
+
+            // 進捗表示 (10%ごと)
+            if (NUMBER_OF_TRIAL >= 10 && (tri + 1) % (NUMBER_OF_TRIAL / 10) == 0) {
+                std::cout << "\rExhaustive AIC Simulation Progress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+            }
+        }
+        std::cout << std::endl;
+
+        return (double)successCount / (double)NUMBER_OF_TRIAL;
+    }
+
+    /**
+     * ステップ 2: AIC 8パス総当たりによるモデル選択後のインパルス応答推定MSEシミュレーション (固定パス用)
+     * @return 平均MSE
+     */
+    double getMSE_ExhaustiveAIC_8paths_fixedMask_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        
+        // 1. パスの固定（parameters.h のマスクをそのまま使用）
+        channel_.updateProfile();
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            // 2. 信号生成
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 3. 総当たり探索の実行 (最初の8パスがマックス)
+            std::vector<int> best_mask_8 = transceiver_.findBestMaskByExhaustiveAIC_8paths();
+
+            // 4. Qサイズ(16)のフルマスクへ展開
+            std::vector<int> full_mask(params_.Q_, 0);
+            for (int q = 0; q < 8; ++q) full_mask[q] = best_mask_8[q];
+
+            // 5. 選択されたマスクを用いて推定実行
+            transceiver_.est_H_by_given_mask(full_mask);
+
+            // 6. MSEの累積
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+
+            // 進捗表示 (10%ごと)
+            if (NUMBER_OF_TRIAL >= 10 && (tri + 1) % (NUMBER_OF_TRIAL / 10) == 0) {
+                std::cout << "\rExhaustive AIC MSE Progress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+            }
+        }
+        std::cout << std::endl;
+
+        // 平均化: 試行回数とサブキャリア数
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * ステップ 2 (Raghavendra版): Raghavendra AIC 8パス総当たりによるモデル選択後のインパルス応答推定MSEシミュレーション (固定パス用)
+     * @return 平均MSE
+     */
+    double getMSE_ExhaustiveRaghavendraAIC_8paths_fixedMask_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        
+        // 1. パスの固定（parameters.h のマスクをそのまま使用）
+        channel_.updateProfile();
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            // 2. 信号生成
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 3. 総当たり探索の実行 (Raghavendra版)
+            std::vector<int> best_mask_8 = transceiver_.findBestMaskByExhaustiveRaghavendraAIC_8paths();
+
+            // 4. Qサイズ(16)のフルマスクへ展開
+            std::vector<int> full_mask(params_.Q_, 0);
+            for (int q = 0; q < 8; ++q) full_mask[q] = best_mask_8[q];
+
+            // 5. 選択されたマスクを用いて推定実行
+            transceiver_.est_H_by_given_mask(full_mask);
+
+            // 6. MSEの累積
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+
+            // 進捗表示 (10%ごと)
+            if (NUMBER_OF_TRIAL >= 10 && (tri + 1) % (NUMBER_OF_TRIAL / 10) == 0) {
+                std::cout << "\rExhaustive Raghavendra AIC MSE Progress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+            }
+        }
+        std::cout << std::endl;
+
+        // 平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * Mode 46: ランダムパスモデルによる平均MSE (真のパスマスクが既知として推定)
+     */
+    double getMSE_RandomPath_KnownMask_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed); // 0 or 1 を生成
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            // ランダムなパス構成でチャネルを生成
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            // 真の遅延プロファイルからマスク（パスの有無）を抽出
+            std::vector<int> true_mask(params_.Q_, 0);
+            const Eigen::VectorXd& xi = channel_.getXi();
+            for (int q = 0; q < params_.Q_; q++) {
+                if (xi(q) > 0.0) {
+                    true_mask[q] = 1;
+                }
+            }
+
+            // 既知のマスクを用いて推定を実行
+            transceiver_.est_H_by_given_mask(true_mask);
+
+            // MSE の蓄積（パイロット区間の平均を使う）
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * @brief Mode 47: AIC vs Raghavendra GAIC の単一試行評価
+     * @return pair<vector<double>, vector<double>> {aic_values, gaic_values}
+     */
+    std::pair<std::vector<double>, std::vector<double>> getAICvsQ_SingleTrial_Simulation(double fd_Ts, double EbN0dB)
+    {
+        setDopplerFrequency(fd_Ts);
+        setNoiseSD(EbN0dB);
+
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed);
+
+        transceiver_.setX_();
+        channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+        transceiver_.setY_(channel_.getH(), noiseSD_);
+
+        return transceiver_.calculateAICvsQ();
+    }
+
+    /**
+     * @brief Mode 48: AIC vs Raghavendra GAIC の複数回平均評価
+     * @return pair<vector<double>, vector<double>> {average_aic_values, average_gaic_values}
+     */
+    std::pair<std::vector<double>, std::vector<double>> getAICvsQ_Average_Simulation(double fd_Ts, double EbN0dB)
+    {
+        setDopplerFrequency(fd_Ts);
+        setNoiseSD(EbN0dB);
+
+        std::vector<double> sum_aic(params_.Q_, 0.0);
+        std::vector<double> sum_gaic(params_.Q_, 0.0);
+
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed);
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+
+            auto [aic, gaic] = transceiver_.calculateAICvsQ();
+            for (int q = 0; q < params_.Q_; ++q) {
+                sum_aic[q] += aic[q];
+                sum_gaic[q] += gaic[q];
+            }
+
+            // 進捗表示
+            if (NUMBER_OF_TRIAL >= 10 && (tri + 1) % (NUMBER_OF_TRIAL / 10) == 0) {
+                std::cout << "\rAIC vs GAIC Simulation Progress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+            }
+        }
+        std::cout << std::endl;
+
+        std::vector<double> avg_aic(params_.Q_);
+        std::vector<double> avg_gaic(params_.Q_);
+        for (int q = 0; q < params_.Q_; ++q) {
+            avg_aic[q] = sum_aic[q] / (double)NUMBER_OF_TRIAL;
+            avg_gaic[q] = sum_gaic[q] / (double)NUMBER_OF_TRIAL;
+        }
+
+        return {avg_aic, avg_gaic};
     }
 
 private:
