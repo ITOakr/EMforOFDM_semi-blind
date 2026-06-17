@@ -134,6 +134,7 @@ int main()
 	std::cout << "46: MSE of Random Path Model with Known Mask vs Eb/N0" << std::endl;
 	std::cout << "47: AIC vs Raghavendra GAIC comparison (Single Trial)" << std::endl;
 	std::cout << "48: AIC vs Raghavendra GAIC comparison (Average over Trials)" << std::endl;
+	std::cout << "49: MSE of h by initial h estimation with Raghavendra GAIC vs Eb/N0 sweep (fixed Doppler)" << std::endl;
 	std::cout << "--------------------------------------------------------------------" << std::endl;
 	std::cin >> mode_select;
 
@@ -1362,6 +1363,29 @@ int main()
 		std::cout << "--------------------------------------------------------------------" << std::endl;
 		std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
 		std::cout << "--------------------------------------------------------------------" << std::endl;
+	}
+
+	else if (mode_select == 49)
+	{
+		// --- モード49: Eb/N0スイープ, Raghavendra GAICを用いたh_est_MSEの確認 ---
+		// 電力ソート法
+		double dopplerFrequency;
+		std::cout << "Enter normalized Doppler f_d*T_s:" ;
+		std::cin >> dopplerFrequency;
+
+		fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_MSE_vs_EbN0_pilot_h_est_MODE49_RaghavendraGAIC.csv";
+		ofs.open(fileName);
+
+		for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+			sim.setDopplerFrequency(dopplerFrequency);
+			sim.setNoiseSD(EbN0dB);
+			
+			mse = sim.get_h_MSE_Simulation_during_pilot_RaghavendraGAIC();
+			
+			std::cout << "-----------" << std::endl;
+			std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse << std::endl;
+			ofs << EbN0dB << "," << mse << std::endl;
+		}
 	}
 
 	else

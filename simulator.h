@@ -309,6 +309,21 @@ public:
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
     }
 
+    double get_h_MSE_Simulation_during_pilot_RaghavendraGAIC()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transceiver_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            transceiver_.setY_(channel_.getH(), noiseSD_);
+            transceiver_.est_H_by_initial_h_RaghavendraGAIC(); // GAICによる推定
+            totalSquaredError += transceiver_.getMSE_during_pilot();
+        }
+        // 試行回数、データシンボル数、サブキャリア数で平均化
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
     /**
      * Mode34: 瞬時信号対雑音電力比 γ(ΔH) の平均を計算するシミュレーション
      * - スウィープは外側の main で行うため、ここでは1つの設定(noiseSD_, fd_Ts_)で

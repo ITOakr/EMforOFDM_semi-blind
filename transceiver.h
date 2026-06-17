@@ -173,6 +173,16 @@ public:
         // std::cout << "OK6" << std::endl;
     }
 
+    // パイロットシンボルからRaghavendra GAICを用いてhを推定し，Hを得る
+    void est_H_by_initial_h_RaghavendraGAIC(){
+        set_initial_params_by_pilot_RaghavendraGAIC();
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
+    }
+
     void est_H_by_RaghavendraAIC(){
         Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC_Update();
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
@@ -1327,6 +1337,82 @@ private:
 
         // 6. パラメータ更新
         this->noiseVariance_ = 1.0 / beta_list[best_idx];
+    }
+
+    // パイロットシンボルからRaghavendra GAICを用いてhの初期値を得る
+    void set_initial_params_by_pilot_RaghavendraGAIC()
+    {
+        Eigen::RowVectorXcd X_avg = X_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+        // 電力(norm)とインデックスのペアを作成
+        std::vector<std::pair<double, int>> pathRank;
+        for (int q = 0; q < params_.Q_; ++q) {
+            pathRank.push_back({ std::norm(h_l(q)), q }); // 電力と元のインデックス
+        }
+
+        // 電力が大きい順にソート
+        std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+
+        std::vector<double> gaic_list(params_.Q_);
+        std::vector<double> residual_list(params_.Q_);
+
+        for (int Q_tilde = 1; Q_tilde <= params_.Q_; ++Q_tilde) {
+            // インデックスのソート
+            std::vector<int> selected_indices;
+            for (int i = 0; i < Q_tilde; ++i) {
+                selected_indices.push_back(pathRank[i].second);
+            }
+            std::sort(selected_indices.begin(), selected_indices.end());
+
+            // W_tilde の生成
+            Eigen::MatrixXcd W_tilde(params_.K_, Q_tilde);
+            for (int i = 0; i < Q_tilde; ++i) {
+                int original_idx = selected_indices[i]; // ソート済みの上位インデックスを取得
+                W_tilde.col(i) = W_est_.col(original_idx); // 対応するDFT行列の列をコピー
+            }
+
+            // 各パスモデルにおける推定値を計算
+            Eigen::VectorXcd h_active = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose();
+            double residual = (Y_avg.transpose() - X_l * W_tilde * h_active).squaredNorm();
+            residual_list[Q_tilde - 1] = residual;
+
+            // Raghavendra GAIC の計算
+            double sigma_est = residual / (double)params_.K_;
+            double V_l = (double)params_.K_ * std::log(sigma_est + 1e-18) / 2.0;
+            double penalty = 2.0 * std::log(std::log((double)params_.K_ + 1e-12)) * ((double)Q_tilde + 1);
+            gaic_list[Q_tilde - 1] = V_l + penalty;
+        }
+
+        // 最良モデルの計算フェーズ
+        // GAIC が最小となるインデックスを特定
+        int best_idx = std::distance(gaic_list.begin(), std::min_element(gaic_list.begin(), gaic_list.end()));
+        int best_Q_tilde = best_idx + 1;
+
+        std::vector<int> final_indices;
+        for (int i = 0; i < best_Q_tilde; ++i) {
+            final_indices.push_back(pathRank[i].second);
+        }
+        std::sort(final_indices.begin(), final_indices.end());
+
+        Eigen::MatrixXcd W_final(params_.K_, best_Q_tilde);
+        for (int i = 0; i < best_Q_tilde; ++i) {
+            W_final.col(i) = W_est_.col(final_indices[i]);
+        }
+
+        Eigen::VectorXcd h_final_active = (W_final.adjoint() * X_l.adjoint() * X_l * W_final).inverse() * W_final.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+        // フルサイズ配列への展開（非採用パスは0埋め）
+        this->h_l = Eigen::VectorXcd::Zero(params_.Q_);
+        for (int i = 0; i < best_Q_tilde; ++i) {
+            this->h_l(final_indices[i]) = h_final_active(i);
+        }
+
+        // 6. パラメータ更新
+        this->noiseVariance_ = residual_list[best_idx] / (double)params_.K_;
     }
 
     // パイロットシンボルからRaghavendraAICを用いての初期値を得る
