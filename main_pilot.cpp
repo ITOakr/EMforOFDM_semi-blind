@@ -341,6 +341,8 @@ int main()
         ofs.open(fileName);
         ofs << "EbN0dB,H_MSE" << std::endl;
 
+        auto start = std::chrono::high_resolution_clock::now();
+
         for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
             sim.setDopplerFrequency(dopplerFrequency);
             sim.setNoiseSD(EbN0dB);
@@ -351,6 +353,10 @@ int main()
             std::cout << "EbN0dB = " << EbN0dB << ", H_MSE = " << H_mse << std::endl;
             ofs << EbN0dB << "," << H_mse << std::endl;
         }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << "Mode 38 Total Execution Time: " << elapsed.count() << " seconds" << std::endl;
     }
     else if (mode_select == 39)
     {
