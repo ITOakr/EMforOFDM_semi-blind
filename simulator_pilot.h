@@ -78,6 +78,20 @@ public:
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
     }
 
+    double get_H_MSE_by_pilot_power_sort_RaghavendraGAIC_simplified()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            receiver_.est_H_by_initial_h_RaghavendraGAIC_simplified(transmitter_.getX());
+            totalSquaredError += receiver_.getMSE_during_pilot();
+        }
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
     double get_H_est_MSE_Simulation_during_pilot()
     {
         double totalSquaredError = 0.0;
