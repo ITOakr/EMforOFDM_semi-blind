@@ -41,8 +41,16 @@ public:
                 }
                 else
                 {
-                    txData_(l, k) = unitIntUniformRand_();
-                    X_(l, k) = symbol_(txData_(l, k));
+                    if (params_.enableDataPilots && (k == 5 || k == 19 || k == 32 || k == 46))
+                    {
+                        txData_(l, k) = -1; // パイロットマーカー
+                        X_(l, k) = params_.PILOT_SYMBOL_; // 固定値 +1.0
+                    }
+                    else
+                    {
+                        txData_(l, k) = unitIntUniformRand_();
+                        X_(l, k) = symbol_(txData_(l, k));
+                    }
                 }
             }
         }

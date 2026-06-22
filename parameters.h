@@ -19,10 +19,11 @@ struct SimulationParameters
     const std::complex<double> PILOT_SYMBOL_ = {1.0, 0.0}; // 固定BPSKパイロット (+1)
     int NUMBER_OF_BIT;                          // 変調方式のビット数 (入力で設定)
     int NUMBER_OF_SYMBOLS;                      // シンボル数 (2^NUMBER_OF_BIT)
+    bool enableDataPilots = true;               // データ部のパイロット挿入有効フラグ
     int seed = 100;
 
     // パスの有無を制御するマスク
-    std::vector<int> pathMask = {1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    std::vector<int> pathMask = {1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     // DFT行列を生成する共通ロジック
     static Eigen::MatrixXcd generateW(int K, int Q, int FFT_size) {

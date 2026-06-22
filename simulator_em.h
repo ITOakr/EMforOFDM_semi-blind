@@ -37,7 +37,7 @@ public:
             total_iterations_sum += trial_avg_iter;
         }
         last_avg_iterations_ = total_iterations_sum / static_cast<double>(NUMBER_OF_TRIAL);
-        return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+        return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)(params_.enableDataPilots ? (params_.K_ - 4) : params_.K_) * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
     }
 
     /**

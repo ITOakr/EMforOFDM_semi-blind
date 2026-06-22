@@ -29,7 +29,7 @@ public:
             receiver_.equalizeByPilotAndDemodulate(transmitter_.getX());
             totalErrorCount += receiver_.getBitErrorCount(transmitter_.getTxData());
         }
-        return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)params_.K_ * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+        return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)(params_.enableDataPilots ? (params_.K_ - 4) : params_.K_) * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
     }
 
     /**
@@ -64,7 +64,7 @@ public:
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
     }
 
-    double get_h_MSE_Simulation_during_pilot_RaghavendraGAIC()
+    double get_H_MSE_by_pilot_power_sort_RaghavendraGAIC()
     {
         double totalSquaredError = 0.0;
         for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
@@ -540,6 +540,45 @@ public:
 
             if (NUMBER_OF_TRIAL >= 10 && (tri + 1) % (NUMBER_OF_TRIAL / 10) == 0) {
                 std::cout << "\rAIC vs GAIC Simulation Progress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
+            }
+        }
+        std::cout << std::endl;
+
+        std::vector<double> avg_aic(params_.Q_);
+        std::vector<double> avg_gaic(params_.Q_);
+        for (int q = 0; q < params_.Q_; ++q) {
+            avg_aic[q] = sum_aic[q] / (double)NUMBER_OF_TRIAL;
+            avg_gaic[q] = sum_gaic[q] / (double)NUMBER_OF_TRIAL;
+        }
+
+        return {avg_aic, avg_gaic};
+    }
+
+    /**
+     * @brief Mode 50: パラメータのパスモデル（固定パスマスク）を用いた AIC vs Raghavendra GAIC の複数回平均評価
+     */
+    std::pair<std::vector<double>, std::vector<double>> getAICvsQ_Average_FixedMask_Simulation(double fd_Ts, double EbN0dB)
+    {
+        setDopplerFrequency(fd_Ts);
+        setNoiseSD(EbN0dB);
+
+        std::vector<double> sum_aic(params_.Q_, 0.0);
+        std::vector<double> sum_gaic(params_.Q_, 0.0);
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+
+            auto [aic, gaic] = receiver_.calculateAICvsQ(transmitter_.getX());
+            for (int q = 0; q < params_.Q_; ++q) {
+                sum_aic[q] += aic[q];
+                sum_gaic[q] += gaic[q];
+            }
+
+            if (NUMBER_OF_TRIAL >= 10 && (tri + 1) % (NUMBER_OF_TRIAL / 10) == 0) {
+                std::cout << "\rAIC vs GAIC Fixed Mask Simulation Progress: " << (int)((double)(tri + 1) / NUMBER_OF_TRIAL * 100.0) << "%" << std::flush;
             }
         }
         std::cout << std::endl;

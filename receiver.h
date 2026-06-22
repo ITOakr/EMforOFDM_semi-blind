@@ -84,6 +84,10 @@ public:
         {
             for (int k = 0; k < params_.K_; k++)
             {
+                if (params_.enableDataPilots && (k == 5 || k == 19 || k == 32 || k == 46))
+                {
+                    continue; // Skip pilot carriers
+                }
                 count += hammingDistance(grayNum_[txData(l, k)], grayNum_[rxData_(l, k)]);
             }
         }
@@ -150,7 +154,7 @@ public:
 
     // パイロットシンボルからRaghavendra GAICを用いてhを推定し，Hを得る
     void est_H_by_initial_h_RaghavendraGAIC(const Eigen::MatrixXcd& X){
-        set_initial_params_by_pilot_RaghavendraGAIC(X);
+        set_initial_params_by_pilot_power_sort_RaghavendraGAIC(X);
         Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
         {
@@ -467,7 +471,7 @@ public:
             activePathIndices_.clear();
             for(int q=0; q<params_.Q_; ++q) activePathIndices_.push_back(q);
 
-            runEMLoop(l); // フルモデルで収束
+            runEMLoop(l, X); // フルモデルで収束
 
             Eigen::VectorXcd h_full = h_l;
             double noise_full = noiseVariance_;
@@ -492,7 +496,7 @@ public:
                 for(int idx : activePathIndices_) h_l(idx) = h_full(idx);
                 noiseVariance_ = noise_full;
 
-                int iter = runEMLoop(l);
+                int iter = runEMLoop(l, X);
 
                 double beta = 1.0 / noiseVariance_;
                 Eigen::VectorXcd Y_vec = Y_.row(l).transpose();
@@ -553,7 +557,7 @@ public:
             {
                 current_iter_count = iter + 1;
 
-                Estep(l);
+                Estep(l, X);
 
                 Eigen::MatrixXcd G = W_est_.adjoint() * R_moment * W_est_;
                 Eigen::VectorXcd b = W_est_.adjoint() * X_bar.adjoint() * Y_.row(l).transpose();
@@ -699,7 +703,7 @@ public:
 
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
         {
-            int iter = runEMLoop(l);
+            int iter = runEMLoop(l, X);
             total_iterations_sum += iter;
 
             H_est_.row(l) = (W_est_ * h_l).transpose();
@@ -1007,7 +1011,7 @@ private:
         this->noiseVariance_ = 1.0 / beta_list[best_idx];
     }
 
-    void set_initial_params_by_pilot_RaghavendraGAIC(const Eigen::MatrixXcd& X)
+    void set_initial_params_by_pilot_power_sort_RaghavendraGAIC(const Eigen::MatrixXcd& X)
     {
         Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
         Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
@@ -1218,7 +1222,7 @@ private:
             for (int iter = 0; iter < MAX_ITER; iter++)
             {
                 current_iter_count = iter + 1;
-                Estep(l);
+                Estep(l, X);
                 Mstep(l);
 
                 for (int k = 0; k < params_.K_; k++)
@@ -1260,7 +1264,7 @@ private:
         return iter_counts.mean();
     }
 
-    int runEMLoop(int l, int max_iter = 100) {
+    int runEMLoop(int l, const Eigen::MatrixXcd& X, int max_iter = 100) {
         const int MIN_ITER = 3;
         Eigen::VectorXi symbol_prev2(params_.K_);
         Eigen::VectorXi symbol_prev1(params_.K_);
@@ -1276,7 +1280,7 @@ private:
         {
             current_iter_count = iter + 1;
             
-            Estep(l);
+            Estep(l, X);
             Mstep(l);
 
             for (int k = 0; k < params_.K_; k++)
@@ -1305,7 +1309,7 @@ private:
         return current_iter_count;
     }
 
-    void Estep(int l)
+    void Estep(int l, const Eigen::MatrixXcd& X)
     {
         Eigen::VectorXcd H_current = W_est_ * h_l;
         double variance = noiseVariance_;
@@ -1314,42 +1318,51 @@ private:
         }
         for (int k = 0; k < params_.K_; k++)
         {
-            Eigen::VectorXd log_likelihoods(params_.NUMBER_OF_SYMBOLS);
-
-            for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++)
+            bool isPilot = params_.enableDataPilots && (k == 5 || k == 19 || k == 32 || k == 46);
+            if (isPilot)
             {
-                std::complex<double> s = symbol_(i);
-                double norm = std::norm(Y_(l, k) - H_current(k) * s);
-                log_likelihoods(i) = -norm / variance;
+                X_bar(k, k) = X(l, k);
+                R_moment(k, k) = std::norm(X(l, k));
             }
-            double log_max = log_likelihoods.maxCoeff();
-            double sumxP_shifted = 0.0;
-            Eigen::VectorXd posterior_prob(params_.NUMBER_OF_SYMBOLS);
-            for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++)
+            else
             {
-                posterior_prob(i) = std::exp(log_likelihoods(i) - log_max);
-                sumxP_shifted += posterior_prob(i);
-            }
+                Eigen::VectorXd log_likelihoods(params_.NUMBER_OF_SYMBOLS);
 
-            if (sumxP_shifted <= 0.0) {
-                std::string error_msg = "FATAL ERROR: sumxP_shifted is zero or negative at l=" 
-                          + std::to_string(l) + ", k=" + std::to_string(k);
-                std::cerr << error_msg << std::endl;
-                throw std::runtime_error(error_msg);   
-            } else {
-                 posterior_prob /= sumxP_shifted;
-            }
+                for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++)
+                {
+                    std::complex<double> s = symbol_(i);
+                    double norm = std::norm(Y_(l, k) - H_current(k) * s);
+                    log_likelihoods(i) = -norm / variance;
+                }
+                double log_max = log_likelihoods.maxCoeff();
+                double sumxP_shifted = 0.0;
+                Eigen::VectorXd posterior_prob(params_.NUMBER_OF_SYMBOLS);
+                for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++)
+                {
+                    posterior_prob(i) = std::exp(log_likelihoods(i) - log_max);
+                    sumxP_shifted += posterior_prob(i);
+                }
 
-            std::complex<double> expected_X = 0.0;
-            double expected_X_norm_sq = 0.0;
+                if (sumxP_shifted <= 0.0) {
+                    std::string error_msg = "FATAL ERROR: sumxP_shifted is zero or negative at l=" 
+                              + std::to_string(l) + ", k=" + std::to_string(k);
+                    std::cerr << error_msg << std::endl;
+                    throw std::runtime_error(error_msg);   
+                } else {
+                     posterior_prob /= sumxP_shifted;
+                }
 
-            for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++)
-            {
-                expected_X += posterior_prob(i) * symbol_(i);
-                expected_X_norm_sq += posterior_prob(i) * std::norm(symbol_(i));
+                std::complex<double> expected_X = 0.0;
+                double expected_X_norm_sq = 0.0;
+
+                for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++)
+                {
+                    expected_X += posterior_prob(i) * symbol_(i);
+                    expected_X_norm_sq += posterior_prob(i) * std::norm(symbol_(i));
+                }
+                X_bar(k, k) = expected_X;
+                R_moment(k, k) = expected_X_norm_sq;
             }
-            X_bar(k, k) = expected_X;
-            R_moment(k, k) = expected_X_norm_sq;
         }
     }
 
@@ -1391,6 +1404,10 @@ private:
         {
             for (int k = 0; k < params_.K_; k++)
             {
+                if (params_.enableDataPilots && (k == 5 || k == 19 || k == 32 || k == 46))
+                {
+                    continue; // Skip pilot carriers
+                }
                 for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++)
                 {
                     obj(i) = std::norm((R_(l, k) - symbol_(i)));

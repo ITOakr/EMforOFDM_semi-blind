@@ -88,6 +88,7 @@ int main()
     std::cout << "47: AIC vs Raghavendra GAIC comparison (Single Trial)" << std::endl;
     std::cout << "48: AIC vs Raghavendra GAIC comparison (Average over Trials)" << std::endl;
     std::cout << "49: MSE of h by initial h estimation with Raghavendra GAIC vs Eb/N0 sweep (fixed Doppler)" << std::endl;
+    std::cout << "50: AIC vs Raghavendra GAIC comparison using fixed path model (Average over Trials)" << std::endl;
     std::cout << "--------------------------------------------------------------------" << std::endl;
     std::cin >> mode_select;
 
@@ -591,12 +592,35 @@ int main()
             sim.setDopplerFrequency(dopplerFrequency);
             sim.setNoiseSD(EbN0dB);
             
-            mse = sim.get_h_MSE_Simulation_during_pilot_RaghavendraGAIC();
+            mse = sim.get_H_MSE_by_pilot_power_sort_RaghavendraGAIC();
             
             std::cout << "-----------" << std::endl;
             std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse << std::endl;
             ofs << EbN0dB << "," << mse << std::endl;
         }
+    }
+    else if (mode_select == 50)
+    {
+        double dopplerFrequency, fixedEbN0dB;
+        std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+        std::cin >> dopplerFrequency;
+        std::cout << "Enter fixed Eb/N0 [dB] for average simulation:";
+        std::cin >> fixedEbN0dB;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_EbN0=" + std::to_string(fixedEbN0dB) + "_AIC_vs_GAIC_Average_FixedMask_MODE50.csv";
+        ofs.open(fileName);
+
+        std::cout << "Running AIC vs Raghavendra GAIC Average Simulation (" << numberOfTrials << " trials) (Mode 50)..." << std::endl;
+        std::cout << "Q, Average_AIC, Average_Raghavendra_GAIC" << std::endl;
+        ofs << "Q,Average_AIC,Average_Raghavendra_GAIC" << std::endl;
+
+        auto [avg_aic, avg_gaic] = sim.getAICvsQ_Average_FixedMask_Simulation(dopplerFrequency, fixedEbN0dB);
+
+        for (size_t q = 0; q < avg_aic.size(); ++q) {
+            std::cout << (q + 1) << ", " << avg_aic[q] << ", " << avg_gaic[q] << std::endl;
+            ofs << (q + 1) << "," << avg_aic[q] << "," << avg_gaic[q] << std::endl;
+        }
+        std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
     }
     else
     {
