@@ -89,6 +89,7 @@ int main()
     std::cout << "48: AIC vs Raghavendra GAIC comparison (Average over Trials)" << std::endl;
     std::cout << "49: MSE of h by initial h estimation with Raghavendra GAIC vs Eb/N0 sweep (fixed Doppler)" << std::endl;
     std::cout << "50: AIC vs Raghavendra GAIC comparison using fixed path model (Average over Trials)" << std::endl;
+    std::cout << "51: MSE of h by initial h estimation with simplified Raghavendra GAIC (no LS re-estimation) vs Eb/N0 sweep (fixed Doppler)" << std::endl;
     std::cout << "--------------------------------------------------------------------" << std::endl;
     std::cin >> mode_select;
 
@@ -588,6 +589,8 @@ int main()
         fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_MSE_vs_EbN0_pilot_h_est_MODE49_RaghavendraGAIC.csv";
         ofs.open(fileName);
 
+        auto start = std::chrono::high_resolution_clock::now();
+
         for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
             sim.setDopplerFrequency(dopplerFrequency);
             sim.setNoiseSD(EbN0dB);
@@ -598,6 +601,10 @@ int main()
             std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse << std::endl;
             ofs << EbN0dB << "," << mse << std::endl;
         }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << "Mode 49 Total Execution Time: " << elapsed.count() << " seconds" << std::endl;
     }
     else if (mode_select == 50)
     {
@@ -621,6 +628,32 @@ int main()
             ofs << (q + 1) << "," << avg_aic[q] << "," << avg_gaic[q] << std::endl;
         }
         std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 51)
+    {
+        double dopplerFrequency;
+        std::cout << "Enter normalized Doppler f_d*T_s:";
+        std::cin >> dopplerFrequency;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_MSE_vs_EbN0_pilot_h_est_MODE51_RaghavendraGAIC_simplified.csv";
+        ofs.open(fileName);
+
+        auto start = std::chrono::high_resolution_clock::now();
+
+        for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+            sim.setDopplerFrequency(dopplerFrequency);
+            sim.setNoiseSD(EbN0dB);
+            
+            mse = sim.get_H_MSE_by_pilot_power_sort_RaghavendraGAIC_simplified();
+            
+            std::cout << "-----------" << std::endl;
+            std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse << std::endl;
+            ofs << EbN0dB << "," << mse << std::endl;
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << "Mode 51 Total Execution Time: " << elapsed.count() << " seconds" << std::endl;
     }
     else
     {

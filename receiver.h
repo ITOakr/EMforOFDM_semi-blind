@@ -162,6 +162,16 @@ public:
         }
     }
 
+    // パイロットシンボルから簡易版Raghavendra GAICを用いてhを推定し，Hを得る
+    void est_H_by_initial_h_RaghavendraGAIC_simplified(const Eigen::MatrixXcd& X){
+        set_initial_params_by_pilot_power_sort_RaghavendraGAIC_simplified(X);
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
+    }
+
     void est_H_by_RaghavendraAIC(const Eigen::MatrixXcd& X){
         Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC_Update(X);
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
@@ -1055,6 +1065,68 @@ private:
         int best_idx = std::distance(gaic_list.begin(), std::min_element(gaic_list.begin(), gaic_list.end()));
         int best_Q_tilde = best_idx + 1;
 
+        std::vector<int> final_indices;
+        for (int i = 0; i < best_Q_tilde; ++i) {
+            final_indices.push_back(pathRank[i].second);
+        }
+        std::sort(final_indices.begin(), final_indices.end());
+
+        Eigen::MatrixXcd W_final(params_.K_, best_Q_tilde);
+        for (int i = 0; i < best_Q_tilde; ++i) {
+            W_final.col(i) = W_est_.col(final_indices[i]);
+        }
+
+        Eigen::VectorXcd h_final_active = (W_final.adjoint() * X_l.adjoint() * X_l * W_final).inverse() * W_final.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+        this->h_l = Eigen::VectorXcd::Zero(params_.Q_);
+        for (int i = 0; i < best_Q_tilde; ++i) {
+            this->h_l(final_indices[i]) = h_final_active(i);
+        }
+
+        this->noiseVariance_ = residual_list[best_idx] / (double)params_.K_;
+    }
+
+    void set_initial_params_by_pilot_power_sort_RaghavendraGAIC_simplified(const Eigen::MatrixXcd& X)
+    {
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+        // 最初の16（または Q_）パスのLS推定値を得る
+        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+        std::vector<std::pair<double, int>> pathRank;
+        for (int q = 0; q < params_.Q_; ++q) {
+            pathRank.push_back({ std::norm(h_l(q)), q });
+        }
+
+        std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+
+        std::vector<double> gaic_list(params_.Q_);
+        std::vector<double> residual_list(params_.Q_);
+
+        Eigen::MatrixXcd X_l_W = X_l * W_est_;
+
+        for (int Q_tilde = 1; Q_tilde <= params_.Q_; ++Q_tilde) {
+            Eigen::VectorXcd h_temp = Eigen::VectorXcd::Zero(params_.Q_);
+            for (int i = 0; i < Q_tilde; ++i) {
+                int q_idx = pathRank[i].second;
+                h_temp(q_idx) = h_l(q_idx); // LS再推定はせず、初期の推定値を抽出
+            }
+
+            double residual = (Y_avg.transpose() - X_l_W * h_temp).squaredNorm();
+            residual_list[Q_tilde - 1] = residual;
+
+            double sigma_est = residual / (double)params_.K_;
+            double V_l = (double)params_.K_ * std::log(sigma_est + 1e-18) / 2.0;
+            double penalty = 2.0 * std::log(std::log((double)params_.K_ + 1e-12)) * ((double)Q_tilde + 1);
+            gaic_list[Q_tilde - 1] = V_l + penalty;
+        }
+
+        int best_idx = std::distance(gaic_list.begin(), std::min_element(gaic_list.begin(), gaic_list.end()));
+        int best_Q_tilde = best_idx + 1;
+
+        // 最終的な h_l を構築（GAIC最小のパスモデルを用いてLS再推定）
         std::vector<int> final_indices;
         for (int i = 0; i < best_Q_tilde; ++i) {
             final_indices.push_back(pathRank[i].second);
