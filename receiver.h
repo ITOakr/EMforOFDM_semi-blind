@@ -247,21 +247,7 @@ public:
 
             // 現在のシンボルの H_est を更新
             H_est_.row(l) = (W_est_ * h_l).transpose();
-            
-            // 診断用出力（最初の数試行のみ出力するため、適当な条件をつける）
-            static int call_count = 0;
-            if (call_count < 1 && (l == 2 || l == 10)) {
-                std::cout << "[Diagnostic] l=" << l << ", n_active=" << n_active 
-                          << ", h_l(active_0)=" << h_l(activePathIndices_[0]) 
-                          << ", H_est(l, 0)=" << H_est_(l, 0) 
-                          << ", H_true(l, 0)=" << H_true_(l, 0) << std::endl;
-            }
-            if (l == params_.L_ - 1) {
-                call_count++;
-            }
         }
-        static int call_count2 = 0;
-        call_count2++;
     }
 
 
