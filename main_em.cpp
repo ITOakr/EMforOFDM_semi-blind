@@ -77,6 +77,8 @@ int main()
     std::cout << "20: Pilot-only SNR degradation ratio vs Doppler (fixed Eb/N0)" << std::endl;
     std::cout << "21: Pilot AIC fixed-path MSE vs Doppler (fixed Eb/N0)" << std::endl;
     std::cout << "29: Sweep frame length L and evaluate MSE (fixed Eb/N0 and Doppler)" << std::endl;
+    std::cout << "56: MSE of CFR (H) by Decision-Directed tracking (Data carriers only)" << std::endl;
+    std::cout << "57: MSE of CFR (H) by Preamble Only (Data carriers only)" << std::endl;
     std::cout << "--------------------------------------------------------------------" << std::endl;
     std::cin >> mode_select;
 
@@ -388,6 +390,50 @@ int main()
         auto end_total = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_total = end_total - start_total;
         std::cout << "Total Simulation Time: " << elapsed_total.count() << " seconds." << std::endl;
+        std::cout << "Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 56)
+    {
+        double dopplerFrequency;
+        std::cout << "Enter normalized Doppler f_d*T_s:";
+        std::cin >> dopplerFrequency;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_DecisionDirected_DataCarrierMSE_Mode56.csv";
+        ofs.open(fileName);
+        std::cout << "Starting Decision-Directed Tracking MSE Simulation (Mode 56)..." << std::endl;
+        std::cout << "EbN0dB, MSE" << std::endl;
+        ofs << "EbN0dB,MSE" << std::endl;
+
+        sim.setDopplerFrequency(dopplerFrequency);
+
+        for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+            sim.setNoiseSD(EbN0dB);
+            double mse_val = sim.get_H_MSE_DecisionDirected_Simulation();
+            std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse_val << std::endl;
+            ofs << EbN0dB << "," << mse_val << std::endl;
+        }
+        std::cout << "Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 57)
+    {
+        double dopplerFrequency;
+        std::cout << "Enter normalized Doppler f_d*T_s:";
+        std::cin >> dopplerFrequency;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_PreambleOnly_DataCarrierMSE_Mode57.csv";
+        ofs.open(fileName);
+        std::cout << "Starting Preamble Only Tracking MSE Simulation (Mode 57)..." << std::endl;
+        std::cout << "EbN0dB, MSE" << std::endl;
+        ofs << "EbN0dB,MSE" << std::endl;
+
+        sim.setDopplerFrequency(dopplerFrequency);
+
+        for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+            sim.setNoiseSD(EbN0dB);
+            double mse_val = sim.get_H_MSE_PreambleOnly_Simulation();
+            std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse_val << std::endl;
+            ofs << EbN0dB << "," << mse_val << std::endl;
+        }
         std::cout << "Results saved to: " << fileName << std::endl;
     }
     else

@@ -110,6 +110,32 @@ public:
     }
 
     /**
+     * データシンボル区間において、パイロットキャリアを除外したデータキャリアのみのMSEを計算する
+     * @return 1試行あたりの純粋なデータキャリアの周波数応答二乗誤差の合計を、データキャリア数で正規化した値
+     */
+    double getMSE_during_data_only_data_carriers()
+    {
+        double mse = 0.0;
+        int data_carrier_count = 0;
+        for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
+        {
+            for (int k = 0; k < params_.K_; k++)
+            {
+                bool isPilot = params_.enableDataPilots && (k == 5 || k == 19 || k == 32 || k == 46);
+                if (!isPilot)
+                {
+                    mse += std::norm(H_true_(l, k) - H_est_(l, k));
+                    data_carrier_count++;
+                }
+            }
+        }
+        if (data_carrier_count > 0) {
+            mse /= static_cast<double>(data_carrier_count); // Normalize per subcarrier per symbol
+        }
+        return mse;
+    }
+
+    /**
      * チャネル推定のMSEを計算する
      * @return 1試行あたりの二乗誤差の合計
      */
@@ -171,6 +197,67 @@ public:
             H_est_.row(l) = H_init;
         }
     }
+
+    // データ部で一般的な判定帰還方式（Decision-Directed）を用いて毎シンボルの伝送路をトラッキングする
+    // プリアンブルで推定された初期 h_l および activePathIndices_ (パスモデル) はそのまま使用する
+    void est_H_by_DecisionDirected(const Eigen::MatrixXcd& X) {
+        int n_active = activePathIndices_.size();
+        if (n_active == 0) return;
+
+        Eigen::MatrixXcd W_active(params_.K_, n_active);
+        for(int i = 0; i < n_active; ++i) {
+            W_active.col(i) = W_est_.col(activePathIndices_[i]);
+        }
+
+        // 判定帰還トラッキング：シンボルごと
+        for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++) {
+            // l-1 のチャネル推定値を用いて現在のシンボルを等化・硬判定
+            Eigen::VectorXcd H_current = W_est_ * h_l; 
+
+            for (int k = 0; k < params_.K_; k++) {
+                bool isPilot = params_.enableDataPilots && (k == 5 || k == 19 || k == 32 || k == 46);
+                if (isPilot) {
+                    X_bar(k, k) = X(l, k); // 既知のパイロットシンボルを使用
+                    R_moment(k, k) = std::norm(X(l, k));
+                } else {
+                    // データキャリア：硬判定
+                    double min_dist = std::numeric_limits<double>::max();
+                    std::complex<double> decided_symbol = symbol_(0);
+                    
+                    for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++) {
+                        double dist = std::norm(Y_(l, k) - H_current(k) * symbol_(i));
+                        if (dist < min_dist) {
+                            min_dist = dist;
+                            decided_symbol = symbol_(i);
+                        }
+                    }
+                    X_bar(k, k) = decided_symbol;
+                    R_moment(k, k) = std::norm(decided_symbol);
+                }
+            }
+
+            Eigen::MatrixXcd A = X_bar * W_active;
+            Eigen::MatrixXcd B = W_active.adjoint() * R_moment * W_active;
+            Eigen::VectorXcd h_active = B.inverse() * A.adjoint() * Y_.row(l).transpose();
+
+            h_l.setZero();
+            for(int i = 0; i < n_active; ++i) {
+                h_l(activePathIndices_[i]) = h_active(i);
+            }
+
+            // 現在のシンボルの H_est を更新
+            H_est_.row(l) = (W_est_ * h_l).transpose();
+        }
+    }
+
+    // データ部で推定を一切行わず、プリアンブルの推定チャネルを全シンボルで使い回す
+    void apply_Preamble_H_to_Data() {
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++) {
+            H_est_.row(l) = H_init;
+        }
+    }
+
 
     void est_H_by_RaghavendraAIC(const Eigen::MatrixXcd& X){
         Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC_Update(X);
@@ -1070,6 +1157,7 @@ private:
             final_indices.push_back(pathRank[i].second);
         }
         std::sort(final_indices.begin(), final_indices.end());
+        this->activePathIndices_ = final_indices;
 
         Eigen::MatrixXcd W_final(params_.K_, best_Q_tilde);
         for (int i = 0; i < best_Q_tilde; ++i) {
@@ -1132,6 +1220,7 @@ private:
             final_indices.push_back(pathRank[i].second);
         }
         std::sort(final_indices.begin(), final_indices.end());
+        this->activePathIndices_ = final_indices;
 
         Eigen::MatrixXcd W_final(params_.K_, best_Q_tilde);
         for (int i = 0; i < best_Q_tilde; ++i) {

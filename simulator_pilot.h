@@ -92,6 +92,123 @@ public:
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
     }
 
+    double get_H_MSE_RaghavendraAIC_AllPatterns()
+    {
+        double total_H_squared_error = 0.0;
+        int max_pattern = (1 << params_.Q_) - 1;
+        int trials_per_pattern = 10;
+        long long total_simulations = (long long)max_pattern * trials_per_pattern;
+        long long current_sim = 0;
+
+        std::vector<int> original_mask = params_.pathMask;
+
+        for (int pattern_idx = 1; pattern_idx <= max_pattern; ++pattern_idx)
+        {
+            for (int q = 0; q < params_.Q_; ++q) {
+                params_.pathMask[q] = (pattern_idx >> q) & 1;
+            }
+            channel_.updateProfile();
+
+            for (int tri = 0; tri < trials_per_pattern; tri++)
+            {
+                transmitter_.setX_();
+                channel_.generateFrequencyResponse(fd_Ts_);
+                receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+                receiver_.est_H_by_RaghavendraAIC(transmitter_.getX());
+                total_H_squared_error += receiver_.getMSE_during_pilot();
+
+                current_sim++;
+                if (current_sim % 10000 == 0 || current_sim == total_simulations) {
+                    std::cout << "\rProgress (Mode 52): " << (int)((double)current_sim / total_simulations * 100.0) << "%" << std::flush;
+                }
+            }
+        }
+        std::cout << std::endl;
+        
+        params_.pathMask = original_mask;
+        channel_.updateProfile();
+
+        return total_H_squared_error / ((double)total_simulations * (double)params_.K_);
+    }
+
+    double get_H_MSE_SimplifiedPowerSortGAIC_AllPatterns()
+    {
+        double total_H_squared_error = 0.0;
+        int max_pattern = (1 << params_.Q_) - 1;
+        int trials_per_pattern = 10;
+        long long total_simulations = (long long)max_pattern * trials_per_pattern;
+        long long current_sim = 0;
+
+        std::vector<int> original_mask = params_.pathMask;
+
+        for (int pattern_idx = 1; pattern_idx <= max_pattern; ++pattern_idx)
+        {
+            for (int q = 0; q < params_.Q_; ++q) {
+                params_.pathMask[q] = (pattern_idx >> q) & 1;
+            }
+            channel_.updateProfile();
+
+            for (int tri = 0; tri < trials_per_pattern; tri++)
+            {
+                transmitter_.setX_();
+                channel_.generateFrequencyResponse(fd_Ts_);
+                receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+                receiver_.est_H_by_initial_h_RaghavendraGAIC_simplified(transmitter_.getX());
+                total_H_squared_error += receiver_.getMSE_during_pilot();
+
+                current_sim++;
+                if (current_sim % 10000 == 0 || current_sim == total_simulations) {
+                    std::cout << "\rProgress (Mode 53): " << (int)((double)current_sim / total_simulations * 100.0) << "%" << std::flush;
+                }
+            }
+        }
+        std::cout << std::endl;
+
+        params_.pathMask = original_mask;
+        channel_.updateProfile();
+
+        return total_H_squared_error / ((double)total_simulations * (double)params_.K_);
+    }
+
+    double get_H_MSE_PowerSortGAIC_AllPatterns()
+    {
+        double total_H_squared_error = 0.0;
+        int max_pattern = (1 << params_.Q_) - 1;
+        int trials_per_pattern = 10;
+        long long total_simulations = (long long)max_pattern * trials_per_pattern;
+        long long current_sim = 0;
+
+        std::vector<int> original_mask = params_.pathMask;
+
+        for (int pattern_idx = 1; pattern_idx <= max_pattern; ++pattern_idx)
+        {
+            for (int q = 0; q < params_.Q_; ++q) {
+                params_.pathMask[q] = (pattern_idx >> q) & 1;
+            }
+            channel_.updateProfile();
+
+            for (int tri = 0; tri < trials_per_pattern; tri++)
+            {
+                transmitter_.setX_();
+                channel_.generateFrequencyResponse(fd_Ts_);
+                receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+                receiver_.est_H_by_initial_h_RaghavendraGAIC(transmitter_.getX());
+                total_H_squared_error += receiver_.getMSE_during_pilot();
+
+                current_sim++;
+                if (current_sim % 10000 == 0 || current_sim == total_simulations) {
+                    std::cout << "\rProgress (Mode 54): " << (int)((double)current_sim / total_simulations * 100.0) << "%" << std::flush;
+                }
+            }
+        }
+        std::cout << std::endl;
+
+        params_.pathMask = original_mask;
+        channel_.updateProfile();
+
+        return total_H_squared_error / ((double)total_simulations * (double)params_.K_);
+    }
+
     double get_H_est_MSE_Simulation_during_pilot()
     {
         double totalSquaredError = 0.0;
@@ -275,6 +392,26 @@ public:
             channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
             receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
             receiver_.est_H_by_initial_h(transmitter_.getX());
+            totalSquaredError += receiver_.getMSE_during_pilot();
+        }
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
+     * Mode 55: 各試行でランダムなパス構成を生成し、Power-sort Raghavendra GAIC で平均MSEを計算する
+     */
+    double getMSE_RandomPath_PowerSortGAIC_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed);
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            receiver_.est_H_by_initial_h_RaghavendraGAIC(transmitter_.getX());
             totalSquaredError += receiver_.getMSE_during_pilot();
         }
         return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
