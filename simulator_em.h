@@ -84,6 +84,32 @@ public:
         return totalSquaredError / static_cast<double>(NUMBER_OF_TRIAL);
     }
 
+    /**
+     * データ部におけるプリアンブル推定値使い回し方式の性能（MSE）をシミュレーションする。
+     * プリアンブル部で Raghavendra GAIC によりパスモデルと初期伝送路を推定し、
+     * データ部ではそれを全シンボルで使い回し、純粋なデータキャリアのみでMSEを評価する。
+     */
+    double get_H_MSE_PreambleOnly_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            
+            // 1. プリアンブル部: Raghavendra GAIC によるパス選択と初期チャネル推定
+            receiver_.est_H_by_initial_h_RaghavendraGAIC(transmitter_.getX());
+            
+            // 2. データ部: プリアンブルで推定された伝送路をそのまま使い回す
+            receiver_.apply_Preamble_H_to_Data();
+            
+            // 3. MSE計算 (データ部・データキャリアのみ)
+            totalSquaredError += receiver_.getMSE_during_data_only_data_carriers();
+        }
+        return totalSquaredError / static_cast<double>(NUMBER_OF_TRIAL);
+    }
+
 
     /**
      * チャネル推定のMSEを計算するシミュレーション (並列化対応版)

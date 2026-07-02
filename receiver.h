@@ -250,6 +250,14 @@ public:
         }
     }
 
+    // データ部で推定を一切行わず、プリアンブルの推定チャネルを全シンボルで使い回す
+    void apply_Preamble_H_to_Data() {
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++) {
+            H_est_.row(l) = H_init;
+        }
+    }
+
 
     void est_H_by_RaghavendraAIC(const Eigen::MatrixXcd& X){
         Eigen::RowVectorXcd H_init = set_initial_params_by_RaghavendraAIC_Update(X);
