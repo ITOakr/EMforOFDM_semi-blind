@@ -93,6 +93,7 @@ int main()
     std::cout << "52: MSE of CFR (H) by Raghavendra AIC (All Possible Path Patterns) vs Eb/N0" << std::endl;
     std::cout << "53: MSE of CFR (H) by Simplified Power-sort Raghavendra GAIC (All Possible Path Patterns) vs Eb/N0" << std::endl;
     std::cout << "54: MSE of CFR (H) by Power-sort Raghavendra GAIC (All Possible Path Patterns) vs Eb/N0" << std::endl;
+    std::cout << "55: MSE of CFR (H) by Power-sort Raghavendra GAIC (Random Paths) vs Eb/N0" << std::endl;
     std::cout << "--------------------------------------------------------------------" << std::endl;
     std::cin >> mode_select;
 
@@ -741,6 +742,34 @@ int main()
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
         std::cout << "Mode 54 Total Execution Time: " << elapsed.count() << " seconds" << std::endl;
+    }
+    else if (mode_select == 55)
+    {
+        double dopplerFrequency;
+        std::cout << "Enter normalized Doppler f_d*T_s:";
+        std::cin >> dopplerFrequency;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "f_dT_s =" + std::to_string(dopplerFrequency) + "_RandomPath_MSE_MODE55_PowerSortGAIC.csv";
+        ofs.open(fileName);
+
+        std::cout << "Starting Random Path MSE Simulation with Power-sort GAIC (Mode 55)..." << std::endl;
+        std::cout << "Eb/N0 [dB], MSE" << std::endl;
+
+        auto start = std::chrono::high_resolution_clock::now();
+
+        for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+            sim.setDopplerFrequency(dopplerFrequency);
+            sim.setNoiseSD(EbN0dB);
+            
+            mse = sim.getMSE_RandomPath_PowerSortGAIC_Simulation();
+            
+            std::cout << EbN0dB << ", " << mse << std::endl;
+            ofs << EbN0dB << "," << mse << std::endl;
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << "Mode 55 Total Execution Time: " << elapsed.count() << " seconds" << std::endl;
     }
     else
     {

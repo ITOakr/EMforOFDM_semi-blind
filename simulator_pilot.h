@@ -398,6 +398,26 @@ public:
     }
 
     /**
+     * Mode 55: 各試行でランダムなパス構成を生成し、Power-sort Raghavendra GAIC で平均MSEを計算する
+     */
+    double getMSE_RandomPath_PowerSortGAIC_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed);
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            receiver_.est_H_by_initial_h_RaghavendraGAIC(transmitter_.getX());
+            totalSquaredError += receiver_.getMSE_during_pilot();
+        }
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
      * Mode 42: ランダムパスモデルによる平均MSE (Raghavendra AIC を全探索で適用)
      */
     double getMSE_RandomPath_RaghavendraAIC_Simulation()

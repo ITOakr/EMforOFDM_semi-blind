@@ -59,6 +59,33 @@ public:
     }
 
     /**
+     * データ部における判定帰還方式（Decision-Directed）のトラッキング性能（MSE）をシミュレーションする。
+     * プリアンブル部で Raghavendra GAIC によりパスモデルと初期伝送路を推定し、
+     * データ部では判定帰還方式で毎シンボル伝送路を更新し、純粋なデータキャリアのみでMSEを評価する。
+     */
+    double get_H_MSE_DecisionDirected_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            
+            // 1. プリアンブル部: Raghavendra GAIC によるパス選択と初期チャネル推定
+            receiver_.est_H_by_initial_h_RaghavendraGAIC(transmitter_.getX());
+            
+            // 2. データ部: 判定帰還（DD）方式によるトラッキング
+            receiver_.est_H_by_DecisionDirected(transmitter_.getX());
+            
+            // 3. MSE計算 (データ部・データキャリアのみ)
+            totalSquaredError += receiver_.getMSE_during_data_only_data_carriers();
+        }
+        return totalSquaredError / static_cast<double>(NUMBER_OF_TRIAL);
+    }
+
+
+    /**
      * チャネル推定のMSEを計算するシミュレーション (並列化対応版)
      * @return MSEのシミュレーション値
      */
