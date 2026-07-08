@@ -1361,56 +1361,20 @@ private:
             H_est_.row(l) = H_init;
         }
 
-        const int MAX_ITER = 100;
-        const int MIN_ITER = 3;
+        return track_H_by_EM(X);
+    }
 
-        Eigen::VectorXi symbol_prev2(params_.K_);
-        Eigen::VectorXi symbol_prev1(params_.K_);
-        Eigen::VectorXi symbol_current(params_.K_);
-
-        Eigen::VectorXd obj(params_.NUMBER_OF_SYMBOLS);
-
+public:
+    // データ部のシンボルに対してのみ、EMアルゴリズムを用いてチャネル（と雑音分散）のトラッキングを行う
+    double track_H_by_EM(const Eigen::MatrixXcd& X)
+    {
+        double total_iterations_sum = 0.0;
         int dataSymbolCount = params_.L_ - params_.NUMBER_OF_PILOT;
-        Eigen::VectorXd iter_counts(dataSymbolCount);
 
         for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++)
         {
-            symbol_prev2.setConstant(-1);
-            symbol_prev1.setConstant(-1);
-
-            int current_iter_count = 0;
-
-            for (int iter = 0; iter < MAX_ITER; iter++)
-            {
-                current_iter_count = iter + 1;
-                Estep(l, X);
-                Mstep(l);
-
-                for (int k = 0; k < params_.K_; k++)
-                {
-                    std::complex<double> H_current_k = (W_est_.row(k) * h_l)(0);
-                    std::complex<double> R_current_k = Y_(l, k) / H_current_k;
-
-                    for(int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++){
-                        obj(i) = std::norm(R_current_k - symbol_(i));
-                    }
-                    Eigen::VectorXd::Index minColumn;
-                    obj.minCoeff(&minColumn);
-                    symbol_current(k) = minColumn;
-                }
-
-                if (iter >= MIN_ITER - 1)
-                {
-                    bool converged = (symbol_current == symbol_prev1) && (symbol_prev1 == symbol_prev2);
-                    if (converged){
-                        break;
-                    }
-                }
-                symbol_prev2 = symbol_prev1;
-                symbol_prev1 = symbol_current;
-            }
-
-            iter_counts(l - params_.NUMBER_OF_PILOT) = static_cast<double>(current_iter_count);
+            int current_iter_count = runEMLoop(l, X);
+            total_iterations_sum += current_iter_count;
 
             H_est_.row(l) = (W_est_ * h_l).transpose();
             for (int k = 0; k < params_.K_; k++)
@@ -1418,13 +1382,14 @@ private:
                 R_(l, k) = Y_(l, k) / (W_est_.row(k) * h_l)(0);
             }
         }
-        if(iter_counts.size() == 0){
+
+        if (dataSymbolCount == 0) {
             return 0.0;
         }
-
-        return iter_counts.mean();
+        return total_iterations_sum / static_cast<double>(dataSymbolCount);
     }
 
+private:
     int runEMLoop(int l, const Eigen::MatrixXcd& X, int max_iter = 100) {
         const int MIN_ITER = 3;
         Eigen::VectorXi symbol_prev2(params_.K_);

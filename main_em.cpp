@@ -79,6 +79,10 @@ int main()
     std::cout << "29: Sweep frame length L and evaluate MSE (fixed Eb/N0 and Doppler)" << std::endl;
     std::cout << "56: MSE of CFR (H) by Decision-Directed tracking (Data carriers only)" << std::endl;
     std::cout << "57: MSE of CFR (H) by Preamble Only (Data carriers only)" << std::endl;
+    std::cout << "58: MSE of CFR (H) by EM tracking with Preamble GAIC (Data carriers only)" << std::endl;
+    std::cout << "66: MSE of CFR (H) by Decision-Directed tracking vs Doppler (fixed Eb/N0)" << std::endl;
+    std::cout << "67: MSE of CFR (H) by Preamble Only vs Doppler (fixed Eb/N0)" << std::endl;
+    std::cout << "68: MSE of CFR (H) by EM tracking with Preamble GAIC vs Doppler (fixed Eb/N0)" << std::endl;
     std::cout << "--------------------------------------------------------------------" << std::endl;
     std::cin >> mode_select;
 
@@ -433,6 +437,112 @@ int main()
             double mse_val = sim.get_H_MSE_PreambleOnly_Simulation();
             std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse_val << std::endl;
             ofs << EbN0dB << "," << mse_val << std::endl;
+        }
+        std::cout << "Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 58)
+    {
+        double dopplerFrequency;
+        std::cout << "Enter normalized Doppler f_d*T_s:";
+        std::cin >> dopplerFrequency;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_EM_GAIC_DataCarrierMSE_Mode58.csv";
+        ofs.open(fileName);
+        std::cout << "Starting EM Tracking with Preamble GAIC MSE Simulation (Mode 58)..." << std::endl;
+        std::cout << "EbN0dB, MSE" << std::endl;
+        ofs << "EbN0dB,MSE" << std::endl;
+
+        sim.setDopplerFrequency(dopplerFrequency);
+
+        for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+            sim.setNoiseSD(EbN0dB);
+            double mse_val = sim.get_H_MSE_EM_RaghavendraGAIC_Simulation();
+            std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse_val << std::endl;
+            ofs << EbN0dB << "," << mse_val << std::endl;
+        }
+        std::cout << "Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 66)
+    {
+        int fixedEbN0dB;
+        std::cout << "Enter fixed Eb/N0 [dB]:";
+        std::cin >> fixedEbN0dB;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_DecisionDirected_MSE_vs_Doppler_EbN0_" + std::to_string(fixedEbN0dB) + "_Mode66.csv";
+        ofs.open(fileName);
+        std::cout << "Starting Decision-Directed Tracking MSE vs Doppler Simulation (Mode 66)..." << std::endl;
+        std::cout << "f_dT_s, MSE" << std::endl;
+        ofs << "f_dT_s,MSE" << std::endl;
+
+        sim.setNoiseSD(fixedEbN0dB);
+
+        for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+            sim.setDopplerFrequency(dopplerFrequency);
+            double mse_val = sim.get_H_MSE_DecisionDirected_Simulation();
+            std::cout << "f_dT_s = " << dopplerFrequency << ", MSE = " << mse_val << std::endl;
+            ofs << dopplerFrequency << "," << mse_val << std::endl;
+
+            if (dopplerFrequency == 0.0) {
+                dopplerFrequency = dopplerStep;
+            } else {
+                dopplerFrequency *= 2.0;
+            }
+        }
+        std::cout << "Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 67)
+    {
+        int fixedEbN0dB;
+        std::cout << "Enter fixed Eb/N0 [dB]:";
+        std::cin >> fixedEbN0dB;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_PreambleOnly_MSE_vs_Doppler_EbN0_" + std::to_string(fixedEbN0dB) + "_Mode67.csv";
+        ofs.open(fileName);
+        std::cout << "Starting Preamble Only MSE vs Doppler Simulation (Mode 67)..." << std::endl;
+        std::cout << "f_dT_s, MSE" << std::endl;
+        ofs << "f_dT_s,MSE" << std::endl;
+
+        sim.setNoiseSD(fixedEbN0dB);
+
+        for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+            sim.setDopplerFrequency(dopplerFrequency);
+            double mse_val = sim.get_H_MSE_PreambleOnly_Simulation();
+            std::cout << "f_dT_s = " << dopplerFrequency << ", MSE = " << mse_val << std::endl;
+            ofs << dopplerFrequency << "," << mse_val << std::endl;
+
+            if (dopplerFrequency == 0.0) {
+                dopplerFrequency = dopplerStep;
+            } else {
+                dopplerFrequency *= 2.0;
+            }
+        }
+        std::cout << "Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 68)
+    {
+        int fixedEbN0dB;
+        std::cout << "Enter fixed Eb/N0 [dB]:";
+        std::cin >> fixedEbN0dB;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_EM_GAIC_MSE_vs_Doppler_EbN0_" + std::to_string(fixedEbN0dB) + "_Mode68.csv";
+        ofs.open(fileName);
+        std::cout << "Starting EM Tracking with Preamble GAIC MSE vs Doppler Simulation (Mode 68)..." << std::endl;
+        std::cout << "f_dT_s, MSE" << std::endl;
+        ofs << "f_dT_s,MSE" << std::endl;
+
+        sim.setNoiseSD(fixedEbN0dB);
+
+        for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
+            sim.setDopplerFrequency(dopplerFrequency);
+            double mse_val = sim.get_H_MSE_EM_RaghavendraGAIC_Simulation();
+            std::cout << "f_dT_s = " << dopplerFrequency << ", MSE = " << mse_val << std::endl;
+            ofs << dopplerFrequency << "," << mse_val << std::endl;
+
+            if (dopplerFrequency == 0.0) {
+                dopplerFrequency = dopplerStep;
+            } else {
+                dopplerFrequency *= 2.0;
+            }
         }
         std::cout << "Results saved to: " << fileName << std::endl;
     }
