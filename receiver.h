@@ -198,9 +198,9 @@ public:
         }
     }
 
-    // データ部で一般的な判定帰還方式（Decision-Directed）を用いて毎シンボルの伝送路をトラッキングする
+    // データ部で一般的な判定帰還方式（Decision-Feedback）を用いて毎シンボルの伝送路をトラッキングする
     // プリアンブルで推定された初期 h_l および activePathIndices_ (パスモデル) はそのまま使用する
-    void est_H_by_DecisionDirected(const Eigen::MatrixXcd& X) {
+    void est_H_by_DecisionFeedback(const Eigen::MatrixXcd& X) {
         int n_active = activePathIndices_.size();
         if (n_active == 0) return;
 
@@ -1389,6 +1389,18 @@ public:
         return total_iterations_sum / static_cast<double>(dataSymbolCount);
     }
 
+    // (追加) 現在の H_est_ を用いて等化・復調を行い、ビットエラー数を返す関数
+    int demodulateAndCountErrors(const Eigen::MatrixXi& txData)
+    {
+        for (int l = params_.NUMBER_OF_PILOT; l < params_.L_; l++) {
+            for (int k = 0; k < params_.K_; k++) {
+                R_(l, k) = Y_(l, k) / H_est_(l, k);
+            }
+        }
+        setRxDataByML();
+        return getBitErrorCount(txData);
+    }
+
 private:
     int runEMLoop(int l, const Eigen::MatrixXcd& X, int max_iter = 100) {
         const int MIN_ITER = 3;
@@ -1434,7 +1446,6 @@ private:
         }
         return current_iter_count;
     }
-
     void Estep(int l, const Eigen::MatrixXcd& X)
     {
         Eigen::VectorXcd H_current = W_est_ * h_l;

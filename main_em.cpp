@@ -77,12 +77,15 @@ int main()
     std::cout << "20: Pilot-only SNR degradation ratio vs Doppler (fixed Eb/N0)" << std::endl;
     std::cout << "21: Pilot AIC fixed-path MSE vs Doppler (fixed Eb/N0)" << std::endl;
     std::cout << "29: Sweep frame length L and evaluate MSE (fixed Eb/N0 and Doppler)" << std::endl;
-    std::cout << "56: MSE of CFR (H) by Decision-Directed tracking (Data carriers only)" << std::endl;
+    std::cout << "56: MSE of CFR (H) by Decision-Feedback tracking (Data carriers only)" << std::endl;
     std::cout << "57: MSE of CFR (H) by Preamble Only (Data carriers only)" << std::endl;
     std::cout << "58: MSE of CFR (H) by EM tracking with Preamble GAIC (Data carriers only)" << std::endl;
-    std::cout << "66: MSE of CFR (H) by Decision-Directed tracking vs Doppler (fixed Eb/N0)" << std::endl;
+    std::cout << "66: MSE of CFR (H) by Decision-Feedback tracking vs Doppler (fixed Eb/N0)" << std::endl;
     std::cout << "67: MSE of CFR (H) by Preamble Only vs Doppler (fixed Eb/N0)" << std::endl;
     std::cout << "68: MSE of CFR (H) by EM tracking with Preamble GAIC vs Doppler (fixed Eb/N0)" << std::endl;
+    std::cout << "76: BER of Decision-Feedback tracking vs Eb/N0 (fixed Doppler)" << std::endl;
+    std::cout << "77: BER of Preamble Only vs Eb/N0 (fixed Doppler)" << std::endl;
+    std::cout << "78: BER of EM tracking with Preamble GAIC vs Eb/N0 (fixed Doppler)" << std::endl;
     std::cout << "--------------------------------------------------------------------" << std::endl;
     std::cin >> mode_select;
 
@@ -402,9 +405,9 @@ int main()
         std::cout << "Enter normalized Doppler f_d*T_s:";
         std::cin >> dopplerFrequency;
 
-        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_DecisionDirected_DataCarrierMSE_Mode56.csv";
+        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_DecisionFeedback_DataCarrierMSE_Mode56.csv";
         ofs.open(fileName);
-        std::cout << "Starting Decision-Directed Tracking MSE Simulation (Mode 56)..." << std::endl;
+        std::cout << "Starting Decision-Feedback Tracking MSE Simulation (Mode 56)..." << std::endl;
         std::cout << "EbN0dB, MSE" << std::endl;
         ofs << "EbN0dB,MSE" << std::endl;
 
@@ -412,7 +415,7 @@ int main()
 
         for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
             sim.setNoiseSD(EbN0dB);
-            double mse_val = sim.get_H_MSE_DecisionDirected_Simulation();
+            double mse_val = sim.get_H_MSE_DecisionFeedback_Simulation();
             std::cout << "EbN0dB = " << EbN0dB << ", MSE = " << mse_val << std::endl;
             ofs << EbN0dB << "," << mse_val << std::endl;
         }
@@ -468,9 +471,9 @@ int main()
         std::cout << "Enter fixed Eb/N0 [dB]:";
         std::cin >> fixedEbN0dB;
 
-        fileName = outputDir + timeStr + "_" + modulationName + "_DecisionDirected_MSE_vs_Doppler_EbN0_" + std::to_string(fixedEbN0dB) + "_Mode66.csv";
+        fileName = outputDir + timeStr + "_" + modulationName + "_DecisionFeedback_MSE_vs_Doppler_EbN0_" + std::to_string(fixedEbN0dB) + "_Mode66.csv";
         ofs.open(fileName);
-        std::cout << "Starting Decision-Directed Tracking MSE vs Doppler Simulation (Mode 66)..." << std::endl;
+        std::cout << "Starting Decision-Feedback Tracking MSE vs Doppler Simulation (Mode 66)..." << std::endl;
         std::cout << "f_dT_s, MSE" << std::endl;
         ofs << "f_dT_s,MSE" << std::endl;
 
@@ -478,7 +481,7 @@ int main()
 
         for (double dopplerFrequency = dopplerMin; dopplerFrequency <= dopplerMax; ) {
             sim.setDopplerFrequency(dopplerFrequency);
-            double mse_val = sim.get_H_MSE_DecisionDirected_Simulation();
+            double mse_val = sim.get_H_MSE_DecisionFeedback_Simulation();
             std::cout << "f_dT_s = " << dopplerFrequency << ", MSE = " << mse_val << std::endl;
             ofs << dopplerFrequency << "," << mse_val << std::endl;
 
@@ -543,6 +546,72 @@ int main()
             } else {
                 dopplerFrequency *= 2.0;
             }
+        }
+        std::cout << "Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 76)
+    {
+        double dopplerFrequency;
+        std::cout << "Enter normalized Doppler f_d*T_s:";
+        std::cin >> dopplerFrequency;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_DecisionFeedback_BER_Mode76.csv";
+        ofs.open(fileName);
+        std::cout << "Starting Decision-Feedback Tracking BER Simulation (Mode 76)..." << std::endl;
+        std::cout << "EbN0dB, BER" << std::endl;
+        ofs << "EbN0dB,BER" << std::endl;
+
+        sim.setDopplerFrequency(dopplerFrequency);
+
+        for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+            sim.setNoiseSD(EbN0dB);
+            double ber_val = sim.get_BER_DecisionFeedback_Simulation();
+            std::cout << "EbN0dB = " << EbN0dB << ", BER = " << ber_val << std::endl;
+            ofs << EbN0dB << "," << ber_val << std::endl;
+        }
+        std::cout << "Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 77)
+    {
+        double dopplerFrequency;
+        std::cout << "Enter normalized Doppler f_d*T_s:";
+        std::cin >> dopplerFrequency;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_PreambleOnly_BER_Mode77.csv";
+        ofs.open(fileName);
+        std::cout << "Starting Preamble Only BER Simulation (Mode 77)..." << std::endl;
+        std::cout << "EbN0dB, BER" << std::endl;
+        ofs << "EbN0dB,BER" << std::endl;
+
+        sim.setDopplerFrequency(dopplerFrequency);
+
+        for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+            sim.setNoiseSD(EbN0dB);
+            double ber_val = sim.get_BER_PreambleOnly_Simulation();
+            std::cout << "EbN0dB = " << EbN0dB << ", BER = " << ber_val << std::endl;
+            ofs << EbN0dB << "," << ber_val << std::endl;
+        }
+        std::cout << "Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 78)
+    {
+        double dopplerFrequency;
+        std::cout << "Enter normalized Doppler f_d*T_s:";
+        std::cin >> dopplerFrequency;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_EM_GAIC_BER_Mode78.csv";
+        ofs.open(fileName);
+        std::cout << "Starting EM Tracking with Preamble GAIC BER Simulation (Mode 78)..." << std::endl;
+        std::cout << "EbN0dB, BER" << std::endl;
+        ofs << "EbN0dB,BER" << std::endl;
+
+        sim.setDopplerFrequency(dopplerFrequency);
+
+        for (int EbN0dB = EbN0dBmin; EbN0dB <= EbN0dBmax; EbN0dB += EbN0dBstp) {
+            sim.setNoiseSD(EbN0dB);
+            double ber_val = sim.get_BER_EM_RaghavendraGAIC_Simulation();
+            std::cout << "EbN0dB = " << EbN0dB << ", BER = " << ber_val << std::endl;
+            ofs << EbN0dB << "," << ber_val << std::endl;
         }
         std::cout << "Results saved to: " << fileName << std::endl;
     }

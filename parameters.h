@@ -9,7 +9,7 @@
 struct SimulationParameters
 {
     int K_ = 52;                          // サブキャリア数 K52
-    int L_ = 11;                          // 1フレームのシンボル数 L
+    int L_ = 12;                          // 1フレームのシンボル数 L
     const int Q_ = 16;                           // 伝送路のインパルス応答のパス数 Q
     const double T_ = 3.2 * std::pow(10, -6);   // 有効シンボル長 T
     const double Tgi_ = 0.8 * std::pow(10, -6); // ガードインターバル長 Tgi
