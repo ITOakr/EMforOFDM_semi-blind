@@ -743,6 +743,38 @@ public:
 
         return {avg_aic, avg_gaic};
     }
+
+    /**
+     * @brief Mode 56: パラメータのパスモデル（固定パスマスク）を用いた AIC, GAIC, logL, V_l, penalty の1回試行評価
+     */
+    AICDetailsResult getAICDetailsvsQ_Single_FixedMask_Simulation(double fd_Ts, double EbN0dB)
+    {
+        setDopplerFrequency(fd_Ts);
+        setNoiseSD(EbN0dB);
+
+        // 1回だけ試行
+        transmitter_.setX_();
+        channel_.generateFrequencyResponse(fd_Ts_);
+        receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+
+        return receiver_.calculateAICDetailsvsQ(transmitter_.getX());
+    }
+
+    /**
+     * @brief Mode 59: Raghavendra Update アルゴリズム (Mode 38) の詳細評価 (Single Trial)
+     */
+    RaghavendraUpdateDetailsResult getAICDetails_RaghavendraAIC_Update_Simulation(double fd_Ts, double EbN0dB)
+    {
+        setDopplerFrequency(fd_Ts);
+        setNoiseSD(EbN0dB);
+
+        // 1回だけ試行
+        transmitter_.setX_();
+        channel_.generateFrequencyResponse(fd_Ts_);
+        receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+
+        return receiver_.getAICDetails_RaghavendraAIC_Update(transmitter_.getX());
+    }
 };
 
 #endif // SIMULATOR_PILOT_H

@@ -14,6 +14,29 @@
 #include "random_collection.h"
 #include "estimator_parameters.h"
 
+struct AICDetailsResult {
+    std::vector<double> aic;
+    std::vector<double> gaic;
+    std::vector<double> logL;
+    std::vector<double> V_l;
+    std::vector<double> penalty;
+};
+
+struct RaghavendraUpdateStageDetail {
+    int stage_index;
+    int max_P;
+    std::vector<int> tested_i;
+    std::vector<double> V_l;
+    std::vector<double> penalty;
+    std::vector<double> gaic;
+    int best_L;
+};
+
+struct RaghavendraUpdateDetailsResult {
+    std::vector<RaghavendraUpdateStageDetail> stages;
+    std::vector<int> final_selected_taps;
+};
+
 class Receiver
 {
 public:
@@ -993,6 +1016,120 @@ public:
         }
 
         return {aic_values, gaic_values};
+    }
+
+    /**
+     * @brief 仮定するパス数 q = 1 ... Q_ に対するAIC, GAICと、その計算過程の logL, V_l, penalty を計算する
+     */
+    AICDetailsResult calculateAICDetailsvsQ(const Eigen::MatrixXcd& X)
+    {
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        X_l = X_avg.asDiagonal();
+
+        Eigen::VectorXcd h_full = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
+
+        std::vector<std::pair<double, int>> pathRank;
+        for (int q = 0; q < params_.Q_; ++q) {
+            pathRank.push_back({ std::norm(h_full(q)), q });
+        }
+        std::sort(pathRank.begin(), pathRank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+
+        AICDetailsResult result;
+        result.aic.resize(params_.Q_, 0.0);
+        result.gaic.resize(params_.Q_, 0.0);
+        result.logL.resize(params_.Q_, 0.0);
+        result.V_l.resize(params_.Q_, 0.0);
+        result.penalty.resize(params_.Q_, 0.0);
+
+        for (int q = 1; q <= params_.Q_; ++q) {
+            std::vector<int> selected_indices;
+            for (int i = 0; i < q; ++i) {
+                selected_indices.push_back(pathRank[i].second);
+            }
+            std::sort(selected_indices.begin(), selected_indices.end());
+
+            Eigen::MatrixXcd W_tilde(params_.K_, q);
+            for (int i = 0; i < q; ++i) {
+                W_tilde.col(i) = W_est_.col(selected_indices[i]);
+            }
+
+            Eigen::VectorXcd h_active = (W_tilde.adjoint() * X_l.adjoint() * X_l * W_tilde).inverse() * W_tilde.adjoint() * X_l.adjoint() * Y_avg.transpose();
+            
+            double residual = (Y_avg.transpose() - X_l * W_tilde * h_active).squaredNorm();
+
+            double beta = (double)params_.K_ / residual;
+            double logL = params_.K_ * std::log(beta) - params_.K_ * std::log(M_PI) - params_.K_;
+            result.aic[q - 1] = -2.0 * (logL - 2.0 * q);
+            result.logL[q - 1] = logL;
+
+            double sigma_est = residual / (double)params_.K_;
+            double V_l = (double)params_.K_ * std::log(sigma_est + 1e-18) / 2.0;
+            double penalty = 2.0 * std::log(std::log((double)params_.K_ + 1e-12)) * ((double)q + 1);
+            
+            result.gaic[q - 1] = V_l + penalty;
+            result.V_l[q - 1] = V_l;
+            result.penalty[q - 1] = penalty;
+        }
+
+        return result;
+    }
+
+    RaghavendraUpdateDetailsResult getAICDetails_RaghavendraAIC_Update(const Eigen::MatrixXcd& X)
+    {
+        RaghavendraUpdateDetailsResult result;
+        
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * (W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose());
+
+        int P = params_.Q_ - 1; 
+        Eigen::VectorXcd current_R = Y_avg.transpose();
+        std::vector<int> selected_taps; 
+        int stage_idx = 1;
+
+        while (P >= 0) {
+            RaghavendraUpdateStageDetail stage_detail;
+            stage_detail.stage_index = stage_idx++;
+            stage_detail.max_P = P;
+
+            std::vector<double> GAIC_list(P + 1);
+            for(int i = 0; i <= P; i++){
+                Eigen::VectorXcd h_temp = Eigen::VectorXcd::Zero(params_.Q_);
+                for(int t = 0; t <= i; t++){
+                    h_temp(t) = h_l(t);
+                }
+                double sigma_est = ((current_R - X_l * W_est_ * h_temp).squaredNorm()) / (double)params_.K_;
+                double V_l = (params_.K_ * std::log(sigma_est + 1e-12)) / 2.0;
+                double penalty = 2.0 * std::log(std::log(params_.K_)) * (i + 1);
+                GAIC_list[i] = V_l + penalty; 
+                
+                stage_detail.tested_i.push_back(i);
+                stage_detail.V_l.push_back(V_l);
+                stage_detail.penalty.push_back(penalty);
+                stage_detail.gaic.push_back(GAIC_list[i]);
+            }
+            int best_L = std::distance(GAIC_list.begin(), std::min_element(GAIC_list.begin(), GAIC_list.end()));
+            selected_taps.push_back(best_L);
+            stage_detail.best_L = best_L;
+            
+            result.stages.push_back(stage_detail);
+
+            current_R = current_R - X_l * W_est_.col(best_L) * h_l(best_L); 
+            
+            P = best_L - 1; 
+            if (P >= 0) {
+                Eigen::MatrixXcd W_rem = W_est_.leftCols(P + 1);
+                h_l.head(P + 1) = (W_rem.adjoint() * X_l.adjoint() * X_l * W_rem).inverse() * (W_rem.adjoint() * X_l.adjoint() * current_R);
+            }
+        }
+
+        std::sort(selected_taps.begin(), selected_taps.end());
+        result.final_selected_taps = selected_taps;
+
+        return result;
     }
 
 private:

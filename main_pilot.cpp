@@ -94,6 +94,8 @@ int main()
     std::cout << "53: MSE of CFR (H) by Simplified Power-sort Raghavendra GAIC (All Possible Path Patterns) vs Eb/N0" << std::endl;
     std::cout << "54: MSE of CFR (H) by Power-sort Raghavendra GAIC (All Possible Path Patterns) vs Eb/N0" << std::endl;
     std::cout << "55: MSE of CFR (H) by Power-sort Raghavendra GAIC (Random Paths) vs Eb/N0" << std::endl;
+    std::cout << "56: AIC Details Single Trial Simulation (Fixed Mask)" << std::endl;
+    std::cout << "59: AIC Details for Raghavendra Update (Mode 38 algorithm)" << std::endl;
     std::cout << "--------------------------------------------------------------------" << std::endl;
     std::cin >> mode_select;
 
@@ -770,6 +772,86 @@ int main()
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
         std::cout << "Mode 55 Total Execution Time: " << elapsed.count() << " seconds" << std::endl;
+    }
+    else if (mode_select == 56)
+    {
+        double dopplerFrequency, fixedEbN0dB;
+        std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+        std::cin >> dopplerFrequency;
+        std::cout << "Enter fixed Eb/N0 [dB] for single simulation:";
+        std::cin >> fixedEbN0dB;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_EbN0=" + std::to_string(fixedEbN0dB) + "_AIC_Details_Single_FixedMask_MODE56.csv";
+        ofs.open(fileName);
+
+        std::cout << "Running AIC Details Single Trial Simulation (Mode 56)..." << std::endl;
+        std::cout << "Q, AIC, Raghavendra_GAIC, logL, V_l, penalty" << std::endl;
+        ofs << "Q,AIC,Raghavendra_GAIC,logL,V_l,penalty" << std::endl;
+
+        AICDetailsResult result = sim.getAICDetailsvsQ_Single_FixedMask_Simulation(dopplerFrequency, fixedEbN0dB);
+
+        for (size_t q = 0; q < result.aic.size(); ++q) {
+            std::cout << (q + 1) << ", " 
+                      << result.aic[q] << ", " 
+                      << result.gaic[q] << ", " 
+                      << result.logL[q] << ", " 
+                      << result.V_l[q] << ", " 
+                      << result.penalty[q] << std::endl;
+            ofs << (q + 1) << "," 
+                << result.aic[q] << "," 
+                << result.gaic[q] << "," 
+                << result.logL[q] << "," 
+                << result.V_l[q] << "," 
+                << result.penalty[q] << std::endl;
+        }
+        std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
+    }
+    else if (mode_select == 59)
+    {
+        double dopplerFrequency, fixedEbN0dB;
+        std::cout << "Enter normalized Doppler frequency (f_d T_s):";
+        std::cin >> dopplerFrequency;
+        std::cout << "Enter fixed Eb/N0 [dB] for single simulation:";
+        std::cin >> fixedEbN0dB;
+
+        fileName = outputDir + timeStr + "_" + modulationName + "_f_dT_s=" + std::to_string(dopplerFrequency) + "_EbN0=" + std::to_string(fixedEbN0dB) + "_AIC_Details_RaghavendraUpdate_MODE59.csv";
+        ofs.open(fileName);
+
+        std::cout << "Running AIC Details Single Trial Simulation for Raghavendra Update (Mode 59)..." << std::endl;
+        std::cout << "Stage, Current_Max_P, Tested_i, V_l, penalty, GAIC, Is_Selected" << std::endl;
+        ofs << "Stage,Current_Max_P,Tested_i,V_l,penalty,GAIC,Is_Selected" << std::endl;
+
+        RaghavendraUpdateDetailsResult result = sim.getAICDetails_RaghavendraAIC_Update_Simulation(dopplerFrequency, fixedEbN0dB);
+
+        for (const auto& stage : result.stages) {
+            for (size_t k = 0; k < stage.tested_i.size(); ++k) {
+                int is_selected = (stage.tested_i[k] == stage.best_L) ? 1 : 0;
+                
+                std::cout << stage.stage_index << ", " 
+                          << stage.max_P << ", " 
+                          << stage.tested_i[k] << ", " 
+                          << stage.V_l[k] << ", " 
+                          << stage.penalty[k] << ", " 
+                          << stage.gaic[k] << ", " 
+                          << is_selected << std::endl;
+                          
+                ofs << stage.stage_index << "," 
+                    << stage.max_P << "," 
+                    << stage.tested_i[k] << "," 
+                    << stage.V_l[k] << "," 
+                    << stage.penalty[k] << "," 
+                    << stage.gaic[k] << "," 
+                    << is_selected << std::endl;
+            }
+        }
+        
+        std::cout << "Final Selected Taps: ";
+        for (int tap : result.final_selected_taps) {
+            std::cout << tap << " ";
+        }
+        std::cout << std::endl;
+        
+        std::cout << "Simulation Completed. Results saved to: " << fileName << std::endl;
     }
     else
     {
