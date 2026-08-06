@@ -59,11 +59,11 @@ public:
     }
 
     /**
-     * データ部における判定帰還方式（Decision-Directed）のトラッキング性能（MSE）をシミュレーションする。
+     * データ部における判定帰還方式（Decision-Feedback）のトラッキング性能（MSE）をシミュレーションする。
      * プリアンブル部で Raghavendra GAIC によりパスモデルと初期伝送路を推定し、
      * データ部では判定帰還方式で毎シンボル伝送路を更新し、純粋なデータキャリアのみでMSEを評価する。
      */
-    double get_H_MSE_DecisionDirected_Simulation()
+    double get_H_MSE_DecisionFeedback_Simulation()
     {
         double totalSquaredError = 0.0;
         for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
@@ -75,8 +75,8 @@ public:
             // 1. プリアンブル部: Raghavendra GAIC によるパス選択と初期チャネル推定
             receiver_.est_H_by_initial_h_RaghavendraGAIC(transmitter_.getX());
             
-            // 2. データ部: 判定帰還（DD）方式によるトラッキング
-            receiver_.est_H_by_DecisionDirected(transmitter_.getX());
+            // 2. データ部: 判定帰還（DF）方式によるトラッキング
+            receiver_.est_H_by_DecisionFeedback(transmitter_.getX());
             
             // 3. MSE計算 (データ部・データキャリアのみ)
             totalSquaredError += receiver_.getMSE_during_data_only_data_carriers();
@@ -137,6 +137,122 @@ public:
         return totalSquaredError / static_cast<double>(NUMBER_OF_TRIAL);
     }
 
+    double get_H_MSE_EM_FullPath_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            
+            // 1. プリアンブル部: フルパスによる初期チャネル推定
+            receiver_.est_H_by_initial_h_full_path(transmitter_.getX());
+            
+            // 2. データ部: 独立させた EMアルゴリズム によるトラッキング
+            receiver_.track_H_by_EM(transmitter_.getX());
+            
+            // 3. MSE計算 (データ部・データキャリアのみ)
+            totalSquaredError += receiver_.getMSE_during_data_only_data_carriers();
+        }
+        return totalSquaredError / static_cast<double>(NUMBER_OF_TRIAL);
+    }
+
+    /**
+     * データ部における判定帰還方式（Decision-Feedback）のトラッキング性能（BER）をシミュレーションする。
+     */
+    double get_BER_DecisionFeedback_Simulation()
+    {
+        int totalErrorCount = 0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            
+            // 1. プリアンブル部: Raghavendra GAIC
+            receiver_.est_H_by_initial_h_RaghavendraGAIC(transmitter_.getX());
+            
+            // 2. データ部: 判定帰還（DF）方式によるトラッキング
+            receiver_.est_H_by_DecisionFeedback(transmitter_.getX());
+            
+            // 3. BER計算用のエラーカウント
+            totalErrorCount += receiver_.demodulateAndCountErrors(transmitter_.getTxData());
+        }
+        return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)(params_.enableDataPilots ? (params_.K_ - 4) : params_.K_) * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+    }
+
+    /**
+     * データ部におけるプリアンブル推定値使い回し方式の性能（BER）をシミュレーションする。
+     */
+    double get_BER_PreambleOnly_Simulation()
+    {
+        int totalErrorCount = 0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            
+            // 1. プリアンブル部: Raghavendra GAIC
+            receiver_.est_H_by_initial_h_RaghavendraGAIC(transmitter_.getX());
+            
+            // 2. データ部: プリアンブル使い回し
+            receiver_.apply_Preamble_H_to_Data();
+            
+            // 3. BER計算用のエラーカウント
+            totalErrorCount += receiver_.demodulateAndCountErrors(transmitter_.getTxData());
+        }
+        return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)(params_.enableDataPilots ? (params_.K_ - 4) : params_.K_) * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+    }
+
+    /**
+     * データ部における EM アルゴリズムのトラッキング性能（BER）をシミュレーションする。
+     */
+    double get_BER_EM_RaghavendraGAIC_Simulation()
+    {
+        int totalErrorCount = 0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            
+            // 1. プリアンブル部: Raghavendra GAIC
+            receiver_.est_H_by_initial_h_RaghavendraGAIC(transmitter_.getX());
+            
+            // 2. データ部: EMトラッキング
+            receiver_.track_H_by_EM(transmitter_.getX());
+            
+            // 3. BER計算用のエラーカウント
+            totalErrorCount += receiver_.demodulateAndCountErrors(transmitter_.getTxData());
+        }
+        return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)(params_.enableDataPilots ? (params_.K_ - 4) : params_.K_) * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+    }
+
+    /**
+     * データ部における フルパス初期推定 + EM アルゴリズムのトラッキング性能（BER）をシミュレーションする。
+     */
+    double get_BER_EM_FullPath_Simulation()
+    {
+        int totalErrorCount = 0;
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateFrequencyResponse(fd_Ts_);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            
+            // 1. プリアンブル部: フルパス推定
+            receiver_.est_H_by_initial_h_full_path(transmitter_.getX());
+            
+            // 2. データ部: EMトラッキング
+            receiver_.track_H_by_EM(transmitter_.getX());
+            
+            // 3. BER計算用のエラーカウント
+            totalErrorCount += receiver_.demodulateAndCountErrors(transmitter_.getTxData());
+        }
+        return (double)totalErrorCount / ((double)NUMBER_OF_TRIAL * (double)params_.NUMBER_OF_BIT * (double)(params_.enableDataPilots ? (params_.K_ - 4) : params_.K_) * ((double)params_.L_ - params_.NUMBER_OF_PILOT));
+    }
 
     /**
      * チャネル推定のMSEを計算するシミュレーション (並列化対応版)

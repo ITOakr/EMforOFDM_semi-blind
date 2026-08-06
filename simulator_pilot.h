@@ -378,6 +378,26 @@ public:
     }
 
     /**
+     * 各試行でランダムなパス構成を生成し、フル推定で平均MSEを計算する (Mode 40用)
+     */
+    double getMSE_RandomPath_FullLS_Simulation()
+    {
+        double totalSquaredError = 0.0;
+        uniform_int_distribution<> dist;
+        dist.init(0, 1, params_.seed);
+
+        for (int tri = 0; tri < NUMBER_OF_TRIAL; tri++)
+        {
+            transmitter_.setX_();
+            channel_.generateRandomPathFrequencyResponse(fd_Ts_, dist);
+            receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+            receiver_.est_H_by_full_LS(transmitter_.getX());
+            totalSquaredError += receiver_.getMSE_during_pilot();
+        }
+        return totalSquaredError / ((double)NUMBER_OF_TRIAL * (double)params_.K_);
+    }
+
+    /**
      * 各試行でランダムなパス構成を生成し、平均MSEを計算する (Mode 40用)
      */
     double getMSE_RandomPath_Mode12_Simulation()
@@ -742,6 +762,38 @@ public:
         }
 
         return {avg_aic, avg_gaic};
+    }
+
+    /**
+     * @brief Mode 56: パラメータのパスモデル（固定パスマスク）を用いた AIC, GAIC, logL, V_l, penalty の1回試行評価
+     */
+    AICDetailsResult getAICDetailsvsQ_Single_FixedMask_Simulation(double fd_Ts, double EbN0dB)
+    {
+        setDopplerFrequency(fd_Ts);
+        setNoiseSD(EbN0dB);
+
+        // 1回だけ試行
+        transmitter_.setX_();
+        channel_.generateFrequencyResponse(fd_Ts_);
+        receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+
+        return receiver_.calculateAICDetailsvsQ(transmitter_.getX());
+    }
+
+    /**
+     * @brief Mode 59: Raghavendra Update アルゴリズム (Mode 38) の詳細評価 (Single Trial)
+     */
+    RaghavendraUpdateDetailsResult getAICDetails_RaghavendraAIC_Update_Simulation(double fd_Ts, double EbN0dB)
+    {
+        setDopplerFrequency(fd_Ts);
+        setNoiseSD(EbN0dB);
+
+        // 1回だけ試行
+        transmitter_.setX_();
+        channel_.generateFrequencyResponse(fd_Ts_);
+        receiver_.setY_(channel_.getH(), transmitter_.getX(), noiseSD_);
+
+        return receiver_.getAICDetails_RaghavendraAIC_Update(transmitter_.getX());
     }
 };
 
