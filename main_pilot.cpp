@@ -83,7 +83,7 @@ int main()
     std::cout << "42: MSE of CFR (H) by Raghavendra AIC (Random Paths) vs Eb/N0" << std::endl;
     std::cout << "43: MSE of CFR (H) by Exhaustive AIC (8 paths, Fixed Mask) vs Eb/N0" << std::endl;
     std::cout << "44: MSE of CFR (H) by Exhaustive Raghavendra AIC (8 paths, Fixed Mask) vs Eb/N0" << std::endl;
-    std::cout << "45: MSE of CFR (H) by Raghavendra AIC Update (Fixed Mask) vs Eb/N0" << std::endl;
+    std::cout << "45: MSE of CFR (H) by Raghavendra AIC Update (Random Paths) vs Eb/N0" << std::endl;
     std::cout << "46: MSE of CFR (H) by Known Mask LS Estimation (Random Paths) vs Eb/N0" << std::endl;
     std::cout << "47: Comparison: Standard AIC vs Raghavendra GAIC (Single Trial)" << std::endl;
     std::cout << "48: Comparison: Standard AIC vs Raghavendra GAIC (Average over Trials)" << std::endl;
@@ -401,7 +401,7 @@ int main()
             sim.setDopplerFrequency(dopplerFrequency);
             sim.setNoiseSD(EbN0dB);
 
-            double mse_val = sim.getMSE_RandomPath_Mode12_Simulation();
+            double mse_val = sim.getMSE_RandomPath_FullLS_Simulation();
 
             std::cout << EbN0dB << ", " << mse_val << std::endl;
             ofs << EbN0dB << "," << mse_val << std::endl;

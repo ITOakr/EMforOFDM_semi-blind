@@ -1,0 +1,78 @@
+---
+name: pr
+description: 変更をコミットし、リモートにpushして、mainブランチへのプルリクエストをgh pr createで自動作成する。ユーザーが「/pr」と入力したとき、または「PRを作って」「プルリクエスト出して」のように依頼されたときに使う。
+allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(git rev-parse:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(gh repo view:*)
+---
+
+## 目的
+
+このリポジトリでの「commit → push → PR作成」を1コマンドで完結させる。ユーザーが `/pr` を呼び出すこと自体が、以下の一連の操作(pushとPR作成を含む)に対する事前承認なので、途中で「pushしていいですか」等の確認は挟まず最後まで実行する。ただし破壊的操作(force push、reset --hardなど)は決して行わない。
+
+## 手順
+
+### 1. 状況把握
+
+以下を実行して現在の状態を把握する:
+
+```
+git status
+git diff HEAD
+git log --oneline -10
+git branch --show-current
+```
+
+`git status` の出力に、意図しなさそうなファイル(`.env`、認証情報、無関係な一時ファイルなど)が混ざっていないか目を通す。怪しいものがあれば、内容を確認してからでないと `git add` しない。
+
+### 2. 変更が無ければ終了
+
+コミットすべき差分(未コミットの変更、および現在のブランチにまだpushされていないコミット)が無い場合は、その旨をユーザーに伝えて終了する。ここで作業を打ち切ってよい。
+
+### 3. ブランチを決める
+
+- 現在 `main` ブランチにいる場合: このリポジトリの既存ブランチ命名慣習(`Add_xxx`、`fix_xxx`、`feat/xxx` など)に合わせて、変更内容を要約した英数字のブランチ名を1つ考え、`git checkout -b <branch>` で新規ブランチを作成する。
+- 既に `main` 以外のブランチにいる場合: そのブランチをそのまま使う(新しいブランチは作らない)。
+
+### 4. コミットする
+
+- ステージするファイルは `git status` の内容から個別に選んで `git add` する。`git add -A` や `git add .` のような一括addは使わない。
+- コミットメッセージは日本語で書く。「何をしたか」の羅列ではなく「なぜその変更をしたか」に焦点を当てて1〜2文にまとめる(このリポジトリの既存コミットログの書き方に合わせる)。
+- ヒアドキュメントでコミットする:
+
+```
+git commit -m "$(cat <<'EOF'
+<日本語のコミットメッセージ>
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+### 5. push する
+
+- 現在のブランチに upstream が設定されていなければ `git push -u origin <branch>`、既に設定済みなら `git push`。
+- pushが `rejected`(リモートに競合するコミットがある等)になった場合、force pushはせず、状況をユーザーに報告してそこで止まる。
+
+### 6. PRを作成する
+
+常にベースブランチは `main` にする。タイトル・本文は `git log` / `git diff` の内容から日本語で自動生成し、確認を挟まずそのまま作成する:
+
+```
+gh pr create --base main --title "<日本語タイトル>" --body "$(cat <<'EOF'
+## 概要
+<変更点を箇条書きで1〜3点、日本語で>
+
+## 動作確認
+<このリポジトリに自動テストは無いため、手動で確認した内容(実行したモード番号、確認したBER/MSEの傾向など)を書く。実際に動作確認していない場合は「未確認: 〇〇のビルド/実行を推奨」のように正直に書く>
+EOF
+)"
+```
+
+### 7. 完了報告
+
+`gh pr create` の出力に含まれるPRのURLをユーザーに提示して終了する。
+
+## 安全面の注意
+
+- `git push --force` / `git push -f`、`git reset --hard`、`git clean -f` などの破壊的操作は絶対に行わない。
+- リモートに同名ブランチが既にあり衝突する場合は、ユーザーに状況を報告して判断を仰ぐ。
+- コミット対象に `.exe` などのビルド成果物が含まれるのはこのリポジトリでは正常(CLAUDE.md参照)。ただし明らかに今回の変更と無関係な `.exe` が混ざっていないかは一応確認する。

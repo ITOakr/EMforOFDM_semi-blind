@@ -191,9 +191,36 @@ public:
         return noiseVariance_;
     }
 
+    // パイロットシンボルからフルLSでhを一括推定し，Hを得る
+    void est_H_by_full_LS(const Eigen::MatrixXcd& X){
+        set_initial_params_by_full_LS(X);
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
+    }
+
     // パイロットシンボルからhを推定し，Hを得る
     void est_H_by_initial_h(const Eigen::MatrixXcd& X){
         set_initial_params_by_pilot(X);
+        Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
+        for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
+        {
+            H_est_.row(l) = H_init;
+        }
+    }
+
+    // パイロットシンボルからフルパス(LS)を用いてhを推定し，Hを得る
+    void est_H_by_initial_h_full_path(const Eigen::MatrixXcd& X){
+        set_initial_params_by_full_LS(X);
+        
+        // フルパスなので、すべてのパス(0 から params_.Q_ - 1)を有効とする
+        activePathIndices_.clear();
+        for (int q = 0; q < params_.Q_; ++q) {
+            activePathIndices_.push_back(q);
+        }
+
         Eigen::RowVectorXcd H_init = (W_est_ * h_l).transpose();
         for (int l = 0; l < params_.NUMBER_OF_PILOT; l++)
         {
@@ -1180,6 +1207,15 @@ private:
         for (int i = 0; i < params_.NUMBER_OF_SYMBOLS; i++) {
             grayNum_[i] = grayCode(i);
         }
+    }
+
+    void set_initial_params_by_full_LS(const Eigen::MatrixXcd& X)
+    {
+        Eigen::RowVectorXcd X_avg = X.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+        Eigen::RowVectorXcd Y_avg = Y_.topRows(params_.NUMBER_OF_PILOT).colwise().mean();
+
+        X_l = X_avg.asDiagonal();
+        h_l = (W_est_.adjoint() * X_l.adjoint() * X_l * W_est_).inverse() * W_est_.adjoint() * X_l.adjoint() * Y_avg.transpose();
     }
 
     void set_initial_params_by_pilot(const Eigen::MatrixXcd& X)
